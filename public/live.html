@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Direct — Vidzy</title>
+  <link rel="stylesheet" href="live.css?v=1">
+</head>
+<body>
+  <header>
+    <button id="backBtn" type="button">← Direct</button>
+    <div><span class="live-dot"></span><strong id="channelName">Chaîne en direct</strong></div>
+    <a id="externalLink" href="#" target="_blank" rel="noopener noreferrer">Ouvrir à part ↗</a>
+  </header>
+  <main>
+    <div id="error" class="notice hidden">Cette chaîne est invalide ou indisponible.</div>
+    <iframe id="livePlayer" title="Lecteur de télévision en direct" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  </main>
+  <script src="live.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Lecteur Vidzy</title>
+  <link rel="stylesheet" href="player.css?v=12">
+</head>
+<body>
+  <header class="player-header">
+    <button id="backBtn" class="back-button" type="button">← Retour</button>
+    <div class="title-box">
+      <strong id="watchTitle">Chargement…</strong>
+      <span id="watchMeta"></span>
+    </div>
+    <div class="player-actions">
+      <button id="previousEpisode" class="episode-button hidden" type="button" aria-label="Épisode précédent">− Épisode</button>
+      <button id="nextEpisode" class="episode-button hidden" type="button" aria-label="Épisode suivant">+ Épisode</button>
+      <a id="directLink" href="#" target="_blank" rel="noopener noreferrer">Vidzy ↗</a>
+    </div>
+  </header>
+
+  <main class="player-shell">
+    <div id="loading" class="notice">Chargement du lecteur Vidzy…</div>
+    <div id="watchError" class="notice error hidden">
+      <strong>Le lecteur intégré ne répond pas.</strong>
+      <span>Utilise « Ouvrir sur Vidzy » en haut à droite.</span>
+    </div>
+    <iframe
+      id="watchPlayer"
+      title="Lecteur vidéo Vidzy"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+      referrerpolicy="strict-origin-when-cross-origin"
+      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+      allowfullscreen></iframe>
+  </main>
+  <script src="player.js?v=14"></script>
+</body>
+</html>

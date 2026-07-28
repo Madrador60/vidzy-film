@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: vidzy
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TMDB_BEARER_TOKEN
+        sync: false
+      - key: ALLOWED_PLAYER_HOSTS
+        value: vidzy.org,www.vidzy.org,hesgoaler.com,www.youtube-nocookie.com

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#08090c">
+  <meta name="description" content="Découvrez des films et séries, puis lancez votre séance avec Vidzy.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Vidzy">
+  <title>Vidzy — Films & séries</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://image.tmdb.org">
+  <link rel="stylesheet" href="styles.css?v=20">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Accueil Vidzy"><span class="brand-mark">V</span><span>VIDZY</span></a>
+    <nav aria-label="Navigation principale">
+      <button id="homeTab" class="tab active" type="button">Accueil</button>
+      <button class="tab" data-type="movie">Films</button>
+      <button class="tab" data-type="series">Séries</button>
+      <button id="liveTab" class="tab live-tab" type="button"><span class="live-dot"></span>TV</button>
+    </nav>
+    <div class="header-actions">
+      <button id="installApp" class="install-app hidden" type="button">Installer</button>
+      <button id="globalSearchBtn" class="global-search-button" type="button" aria-label="Rechercher partout">⌕ <span>Rechercher</span></button>
+      <button id="favoritesBtn" class="favorites-link" type="button">♡ Ma liste <span id="favoritesCount">0</span></button>
+      <div class="profile-wrap">
+        <button id="profileBtn" class="profile-button" type="button" aria-haspopup="menu" aria-expanded="false">
+          <span id="profileAvatar" class="profile-avatar">M</span><span id="profileName">Madra</span><span class="profile-chevron">⌄</span>
+        </button>
+        <div id="profileMenu" class="profile-menu hidden" role="menu" aria-label="Choisir un profil"></div>
+      </div>
+    </div>
+  </header>
+
+  <div id="globalSearch" class="global-search hidden" role="dialog" aria-modal="true" aria-labelledby="globalSearchTitle">
+    <div class="global-search-panel">
+      <div class="global-search-head">
+        <div><p class="eyebrow">Recherche globale</p><h2 id="globalSearchTitle">Que souhaitez-vous regarder ?</h2></div>
+        <button id="globalSearchClose" class="modal-close" type="button" aria-label="Fermer la recherche">×</button>
+      </div>
+      <label class="global-search-field">
+        <span>⌕</span>
+        <input id="globalSearchInput" type="search" placeholder="Film, série, acteur…" autocomplete="off">
+      </label>
+      <div class="global-search-filters">
+        <select id="globalSearchType" aria-label="Filtrer la recherche par type">
+          <option value="">Tous les types</option>
+          <option value="person">Personnes</option>
+          <option value="movie">Films</option>
+          <option value="serie">Séries</option>
+        </select>
+        <input id="globalSearchYear" type="number" min="1880" max="2100" placeholder="Année" aria-label="Filtrer par année">
+        <select id="globalSearchRating" aria-label="Filtrer par note minimale">
+          <option value="0">Toutes les notes</option>
+          <option value="6">6 et plus</option>
+          <option value="7">7 et plus</option>
+          <option value="8">8 et plus</option>
+        </select>
+        <button id="globalSearchClear" class="clear-button" type="button">Effacer</button>
+      </div>
+      <div id="recentSearches" class="recent-searches hidden" aria-label="Recherches récentes"></div>
+      <div id="globalSearchResults" class="global-search-results">
+        <p class="global-search-message">Commencez à écrire pour explorer tout le catalogue.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="personPage" class="person-page hidden" role="dialog" aria-modal="true" aria-labelledby="personName" aria-hidden="true">
+    <button id="personClose" class="modal-close" type="button" aria-label="Fermer la fiche acteur">×</button>
+    <div class="person-shell">
+      <aside class="person-sidebar">
+        <div id="personPhoto" class="person-photo"></div>
+        <div id="personLinks" class="person-links"></div>
+      </aside>
+      <section class="person-content">
+        <p class="eyebrow">Fiche artiste</p>
+        <h2 id="personName">Chargement…</h2>
+        <p id="personMeta" class="person-meta"></p>
+        <p id="personBiography" class="person-biography"></p>
+        <button id="personBioToggle" class="text-button hidden" type="button">Lire la biographie complète</button>
+        <div class="person-filmography-heading">
+          <div><p class="eyebrow">Carrière</p><h3>Filmographie</h3></div>
+          <span id="personCreditCount"></span>
+        </div>
+        <div id="personCredits" class="person-credits"></div>
+      </section>
+    </div>
+  </div>
+
+  <main>
+    <section id="hero" class="hero">
+      <div id="heroBackdrop" class="hero-backdrop"></div>
+      <div class="hero-shade"></div>
+      <div class="hero-content">
+        <p id="heroEyebrow" class="eyebrow">À découvrir maintenant</p>
+        <h1 id="heroTitle">Votre prochaine histoire commence ici.</h1>
+        <div id="heroMeta" class="hero-meta"></div>
+        <p id="heroOverview" class="hero-copy">Explorez les films et séries du moment, trouvez votre coup de cœur et lancez la lecture en un clic.</p>
+        <div class="hero-actions">
+          <button id="heroPlay" class="primary" disabled>▶ Regarder</button>
+          <button id="browseBtn" class="secondary" disabled>ⓘ Plus d’infos</button>
+        </div>
+      </div>
+      <div class="hero-carousel" aria-label="Sélection à la une">
+        <button id="heroPrev" type="button" aria-label="Contenu précédent">‹</button>
+        <div id="heroDots" class="hero-dots"></div>
+        <button id="heroNext" type="button" aria-label="Contenu suivant">›</button>
+      </div>
+    </section>
+
+    <section id="discovery" class="discovery" aria-label="Sélections">
+      <div id="continueSection" class="rail-section hidden">
+        <div class="rail-heading"><h2>Reprendre avec Vidzy</h2><button id="clearHistoryBtn" class="rail-heading-action" type="button">Effacer l’historique</button></div>
+        <div id="continueRail" class="media-rail"></div>
+      </div>
+      <div id="personalizedSection" class="rail-section hidden">
+        <div class="rail-heading"><h2 id="personalizedTitle">Pour vous</h2><span>Selon vos envies</span></div>
+        <div id="personalizedRail" class="media-rail"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Tendances du jour</h2><span>Ce que tout le monde regarde</span></div>
+        <div id="trendingRail" class="media-rail rail-loading"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Les incontournables du moment</h2><span>Films populaires</span></div>
+        <div id="popularRail" class="media-rail rail-loading"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Séries qui font parler</h2><span>À regarder maintenant</span></div>
+        <div id="seriesRail" class="media-rail rail-loading"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Frissons & sensations</h2><span>Action</span></div>
+        <div id="actionRail" class="media-rail rail-loading"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Nouveautés</h2><span>Fraîchement arrivées</span></div>
+        <div id="newRail" class="media-rail rail-loading"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Pour rire</h2><span>Comédies</span></div>
+        <div id="comedyRail" class="media-rail rail-loading"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Nuits blanches</h2><span>Horreur</span></div>
+        <div id="horrorRail" class="media-rail rail-loading"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Animation & animés</h2><span>Pour tous les univers</span></div>
+        <div id="animationRail" class="media-rail rail-loading"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Au-delà du réel</h2><span>Science-fiction</span></div>
+        <div id="scifiRail" class="media-rail rail-loading"></div>
+      </div>
+      <div class="rail-section">
+        <div class="rail-heading"><h2>Les mieux notés</h2><span>Plébiscités par le public</span></div>
+        <div id="ratedRail" class="media-rail rail-loading"></div>
+      </div>
+    </section>
+
+    <section id="liveView" class="live-view hidden" aria-labelledby="liveTitle">
+      <div class="live-heading">
+        <div><p class="eyebrow">Télévision en direct</p><h1 id="liveTitle">Le direct, maintenant.</h1><p>Retrouvez les chaînes disponibles et lancez la lecture instantanément.</p></div>
+        <div class="live-status"><span class="live-dot"></span><strong id="liveCount">Chargement…</strong></div>
+      </div>
+      <div class="live-toolbar">
+        <label class="search-field"><span class="search-icon">⌕</span><input id="liveSearch" type="search" placeholder="Rechercher une chaîne…" autocomplete="off"></label>
+        <select id="liveCategory" aria-label="Filtrer par catégorie"><option value="">Toutes les catégories</option></select>
+        <select id="liveCountry" aria-label="Filtrer par pays"><option value="">Tous les pays</option></select>
+      </div>
+      <div id="liveGrid" class="live-grid"><div class="live-loading">Chargement des chaînes…</div></div>
+      <button id="liveMore" class="live-more hidden" type="button">Afficher plus de chaînes</button>
+    </section>
+
+    <section class="catalogue hidden" aria-labelledby="sectionTitle">
+      <div class="catalogue-intro">
+        <div>
+          <p class="eyebrow">Sélection Vidzy</p>
+          <h2 id="sectionTitle">Films populaires</h2>
+        </div>
+        <p id="count" class="result-count" aria-live="polite"></p>
+        <button id="clearListBtn" class="rail-heading-action hidden" type="button">Vider Ma liste</button>
+      </div>
+
+      <form id="filters" class="toolbar" role="search">
+        <label class="search-field" aria-label="Rechercher">
+          <span class="search-icon">⌕</span>
+          <input id="search" type="search" placeholder="Rechercher un titre…" autocomplete="off">
+        </label>
+        <button id="searchBtn" class="primary" type="submit">Rechercher</button>
+        <select id="genre" aria-label="Filtrer par genre"><option value="">Tous les genres</option></select>
+        <select id="sort" aria-label="Trier les résultats">
+          <option value="popularity.desc">Les plus populaires</option>
+          <option value="vote_average.desc">Les mieux notés</option>
+          <option value="primary_release_date.desc">Les plus récents</option>
+        </select>
+        <input id="year" type="number" min="1900" max="2100" placeholder="Année" aria-label="Filtrer par année">
+        <button id="clearBtn" class="clear-button" type="button" aria-label="Réinitialiser les filtres">Réinitialiser</button>
+      </form>
+
+      <div id="setup" class="message error-message hidden"><h2>Configuration requise</h2><p>Ajoutez votre jeton TMDB dans le fichier <code>.env</code>, puis relancez le site.</p></div>
+      <section id="grid" class="grid" aria-live="polite"></section>
+      <div id="loading" class="loading" role="status">Chargement du catalogue…</div>
+
+      <section class="pagination" aria-label="Pagination">
+        <button id="prev2" class="page-button">← Précédent</button>
+        <span id="pageInfo2">Page 1</span>
+        <button id="next2" class="page-button">Suivant →</button>
+      </section>
+      <div class="hidden" aria-hidden="true"><button id="prev"></button><span id="pageInfo"></span><button id="next"></button></div>
+    </section>
+  </main>
+
+  <footer><a class="brand" href="/"><span class="brand-mark">V</span><span>VIDZY</span></a><p>Le cinéma, sans détour.</p></footer>
+
+  <section id="inlinePlayer" class="inline-player hidden" aria-label="Lecteur Vidzy">
+    <header class="inline-player-header">
+      <button id="inlinePlayerBack" type="button">← Retour à la fiche</button>
+      <div><strong id="inlinePlayerTitle">Lecture Vidzy</strong><span id="inlinePlayerMeta"></span></div>
+      <a id="inlinePlayerExternal" href="#" target="_blank" rel="noopener noreferrer">Ouvrir sur Vidzy ↗</a>
+    </header>
+    <div class="inline-player-stage">
+      <div id="inlinePlayerLoading" class="inline-player-loading">Chargement du lecteur…</div>
+      <iframe id="inlinePlayerFrame" title="Lecteur vidéo Vidzy" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    </div>
+  </section>
+
+  <div id="modal" class="detail-modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true">
+    <div id="modalCard" class="detail-card">
+      <button id="close" class="modal-close" type="button" aria-label="Fermer">×</button>
+      <div id="modalHero" class="detail-visual"><div class="detail-gradient"></div></div>
+      <div class="detail-content">
+        <span id="modalBadge" class="detail-badge"></span>
+        <h2 id="modalTitle">Chargement…</h2>
+        <p id="modalMeta" class="detail-meta"></p>
+        <div id="modalGenres" class="genre-pills"></div>
+        <div id="modalFacts" class="detail-facts"></div>
+        <p id="modalOverview" class="detail-overview"></p>
+        <section id="castSection" class="cast-section hidden" aria-labelledby="castTitle">
+          <div class="cast-heading">
+            <h3 id="castTitle">Casting</h3>
+            <span>Acteurs principaux</span>
+          </div>
+          <div id="modalCast" class="cast-rail"></div>
+        </section>
+        <section id="seriesControls" class="season-browser hidden" aria-labelledby="episodesTitle">
+          <div class="season-heading">
+            <h3 id="episodesTitle">Épisodes</h3>
+            <label><span>Saison</span><select id="season" aria-label="Choisir une saison"></select></label>
+          </div>
+          <input id="episode" type="hidden" value="1">
+          <div id="episodesList" class="episodes-list"><div class="episodes-loading">Chargement des épisodes…</div></div>
+        </section>
+        <div class="detail-actions">
+          <button id="play" class="primary" type="button">▶ Regarder maintenant</button>
+          <button id="nextEpisode" class="secondary hidden" type="button">Épisode suivant →</button>
+          <button id="favoriteDetail" class="secondary" type="button">♡ Ajouter à ma liste</button>
+        </div>
+        <p id="availability" class="availability" aria-live="polite"></p>
+        <section id="trailerSection" class="trailer-section hidden" aria-labelledby="trailerTitle">
+          <div class="trailer-heading"><h3 id="trailerTitle">Bande-annonce</h3><span id="trailerLanguage"></span></div>
+          <div class="trailer-frame">
+            <iframe id="trailerPlayer" title="Bande-annonce" loading="lazy" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+          </div>
+        </section>
+        <p id="trailerUnavailable" class="trailer-unavailable hidden">Aucune bande-annonce officielle disponible pour ce titre.</p>
+        <section id="recommendationsSection" class="recommendations-section hidden" aria-labelledby="recommendationsTitle">
+          <div class="trailer-heading"><h3 id="recommendationsTitle">Vous aimerez aussi</h3><span>Sélection pour vous</span></div>
+          <div id="recommendationsRail" class="recommendations-rail"></div>
+        </section>
+        <section id="similarSection" class="recommendations-section hidden" aria-labelledby="similarTitle">
+          <div class="trailer-heading"><h3 id="similarTitle">Titres similaires</h3><span>Dans le même univers</span></div>
+          <div id="similarRail" class="recommendations-rail"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <script src="app.js?v=35"></script>
+</body>
+</html>
