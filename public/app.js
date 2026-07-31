@@ -13,6 +13,7 @@ const activeProfile = profiles.find(profile => profile.id === activeProfileId) |
 const favoriteKey = `vidzy-favorites-v2-${activeProfile.id}`;
 const historyKey = `vidzy-history-v2-${activeProfile.id}`;
 const progressKey = `vidzy-progress-v1-${activeProfile.id}`;
+const languageKey = `vidzy-language-v1-${activeProfile.id}`;
 let liveChannels = [];
 let liveLoaded = false;
 let liveVisibleLimit = 60;
@@ -28,6 +29,7 @@ let currentEpisodes = [];
 let inlineProgressTimer = 0;
 let inlineProgressContext = null;
 let installPrompt = null;
+const loadedHomeRails = new Set();
 function readLocalList(key) {
   try {
     const value = JSON.parse(localStorage.getItem(key) || '[]');
@@ -38,6 +40,7 @@ let favorites = readLocalList(favoriteKey);
 let watchHistory = readLocalList(historyKey);
 let watchProgress = {};
 try { watchProgress = JSON.parse(localStorage.getItem(progressKey) || '{}') || {}; } catch { watchProgress = {}; }
+$('#playLanguage').value = localStorage.getItem(languageKey) || '';
 if (activeProfile.id === 'madra' && !localStorage.getItem('vidzy-profile-migration-v2')) {
   if (!favorites.length) favorites = readLocalList('vidzy-favorites-v1');
   if (!watchHistory.length) watchHistory = readLocalList('vidzy-history-v1');
@@ -116,9 +119,7 @@ async function init() {
       return;
     }
     await refreshLocalCollections();
-    await loadGenres();
     await loadHome();
-    await load();
     if (location.hash === '#direct') enterLive();
   } catch (error) {
     loading.textContent = `Impossible de démarrer : ${error.message}`;
@@ -485,40 +486,47 @@ function renderHistory() {
 
 async function loadHome() {
   renderHistory();
-  loadPersonalizedRail();
-  const requests = [
-    json('/api/trending'),
-    json('/api/catalog/movie?page=1&sort=popularity.desc'),
-    json('/api/catalog/series?page=1&sort=popularity.desc'),
-    json('/api/catalog/movie?page=1&sort=popularity.desc&genre=28'),
-    json('/api/catalog/movie?page=1&sort=vote_average.desc'),
-    json(`/api/catalog/movie?page=1&sort=primary_release_date.desc&year=${new Date().getFullYear()}`),
-    json('/api/catalog/movie?page=1&sort=popularity.desc&genre=35'),
-    json('/api/catalog/movie?page=1&sort=popularity.desc&genre=27'),
-    json('/api/catalog/series?page=1&sort=popularity.desc&genre=16'),
-    json('/api/catalog/movie?page=1&sort=popularity.desc&genre=878')
-  ];
-  const results = await Promise.allSettled(requests);
+  const deferredPersonalization = () => loadPersonalizedRail();
+  if ('requestIdleCallback' in window) window.requestIdleCallback(deferredPersonalization, { timeout: 2500 });
+  else window.setTimeout(deferredPersonalization, 800);
   const rails = [
-    ['#trendingRail', results[0], true],
-    ['#popularRail', results[1], true],
-    ['#seriesRail', results[2], false],
-    ['#actionRail', results[3], false],
-    ['#ratedRail', results[4], true],
-    ['#newRail', results[5], false],
-    ['#comedyRail', results[6], false],
-    ['#horrorRail', results[7], false],
-    ['#animationRail', results[8], false],
-    ['#scifiRail', results[9], false]
+    { selector: '#trendingRail', url: '/api/trending', ranked: true },
+    { selector: '#seriesRail', url: '/api/catalog/series?page=1&sort=popularity.desc' },
+    { selector: '#actionRail', url: '/api/catalog/movie?page=1&sort=popularity.desc&genre=28' },
+    { selector: '#ratedRail', url: '/api/catalog/movie?page=1&sort=vote_average.desc', ranked: true },
+    { selector: '#newRail', url: `/api/catalog/movie?page=1&sort=primary_release_date.desc&year=${new Date().getFullYear()}` },
+    { selector: '#comedyRail', url: '/api/catalog/movie?page=1&sort=popularity.desc&genre=35' },
+    { selector: '#horrorRail', url: '/api/catalog/movie?page=1&sort=popularity.desc&genre=27' },
+    { selector: '#animationRail', url: '/api/catalog/series?page=1&sort=popularity.desc&genre=16' },
+    { selector: '#scifiRail', url: '/api/catalog/movie?page=1&sort=popularity.desc&genre=878' }
   ];
-  rails.forEach(([selector, result, ranked]) => {
-    if (result.status === 'fulfilled') renderRail(selector, result.value.results || [], ranked);
-    else {
-      $(selector).classList.remove('rail-loading');
-      $(selector).innerHTML = '<div class="message"><p>Cette sélection est momentanément indisponible.</p></div>';
-    }
-  });
-  if (results[1].status === 'fulfilled') setupFeatured(results[1].value.results || []);
+  await loadHomeRail({ selector: '#popularRail', url: '/api/catalog/movie?page=1&sort=popularity.desc', ranked: true, featured: true });
+  rails.forEach(observeHomeRail);
+}
+
+async function loadHomeRail({ selector, url, ranked = false, featured = false }) {
+  if (loadedHomeRails.has(selector)) return;
+  loadedHomeRails.add(selector);
+  try {
+    const data = await json(url);
+    const items = data.results || [];
+    renderRail(selector, items, ranked);
+    if (featured) setupFeatured(items);
+  } catch {
+    $(selector).classList.remove('rail-loading');
+    $(selector).innerHTML = '<div class="message"><p>Cette sélection est momentanément indisponible.</p></div>';
+  }
+}
+
+function observeHomeRail(config) {
+  const rail = $(config.selector);
+  if (!('IntersectionObserver' in window)) return void loadHomeRail(config);
+  const observer = new IntersectionObserver(entries => {
+    if (!entries.some(entry => entry.isIntersecting)) return;
+    observer.disconnect();
+    loadHomeRail(config);
+  }, { rootMargin: '350px 0px', threshold: 0.01 });
+  observer.observe(rail.closest('.rail-section'));
 }
 
 async function loadPersonalizedRail() {
@@ -674,6 +682,7 @@ async function openItem(type, id, item = null) {
     $('#modalHero').classList.remove('hidden');
     $('#modalCard').scrollTop = 0;
     $('#availability').textContent = '';
+    [...$('#playLanguage').options].forEach(option => { option.disabled = false; });
     $('#trailerPlayer').src = '';
     $('#trailerSection').classList.add('hidden');
     $('#trailerUnavailable').classList.add('hidden');
@@ -777,10 +786,12 @@ async function loadSeason(seriesId, seasonNumber, preferredEpisode = 1) {
     $('#episode').value = String(selectedEpisode);
     $('#episodesList').innerHTML = episodes.map(episode => {
       const episodeImage = episode.image || state.selectedItem?.backdrop || state.selectedItem?.poster || '';
+      const progress = watchProgress[`series:${seriesId}:${seasonNumber}:${episode.number}`] || {};
+      const completed = Boolean(progress.completed) || (progress.durationSeconds && progress.seconds / progress.durationSeconds >= .9);
       return `
-      <button class="episode-card ${episode.number === selectedEpisode ? 'active' : ''}" type="button" data-episode="${episode.number}">
+      <button class="episode-card ${episode.number === selectedEpisode ? 'active' : ''} ${completed ? 'completed' : ''}" type="button" data-episode="${episode.number}">
         <span class="episode-image ${episode.image ? '' : 'episode-image-fallback'}">${episodeImage ? `<img loading="lazy" src="${episodeImage}" alt="Illustration de l’épisode ${episode.number}">` : ''}<span>▶</span></span>
-        <span class="episode-copy"><h4>${episode.number}. ${esc(episode.name)}</h4><p>${esc(episode.overview || 'Résumé bientôt disponible.')}</p></span>
+        <span class="episode-copy"><h4>${episode.number}. ${esc(episode.name)} ${completed ? '<span class="episode-status">✓ Terminé</span>' : ''}</h4><p>${esc(episode.overview || 'Résumé bientôt disponible.')}</p></span>
         <span class="episode-meta">${[
           episode.airDate ? new Date(`${episode.airDate}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
           episode.runtime ? `${episode.runtime} min` : '',
@@ -794,6 +805,7 @@ async function loadSeason(seriesId, seasonNumber, preferredEpisode = 1) {
         $('#episodesList').querySelectorAll('.episode-card').forEach(item => item.classList.remove('active'));
         card.classList.add('active');
         selectedEpisodeRuntime = Number(episodes.find(episode => String(episode.number) === card.dataset.episode)?.runtime || 0);
+        if (state.selectedItem) rememberWatch({ ...state.selectedItem, lastSeason: Number(seasonNumber), lastEpisode: Number(card.dataset.episode) });
         $('#play').textContent = `▶ Regarder S${seasonNumber} E${card.dataset.episode}`;
         updateNextEpisodeButton();
       });
@@ -829,6 +841,10 @@ async function showVidzyStatus(id) {
     const languages = (status.languages || []).map(language => String(language).toUpperCase());
     $('#availability').textContent = `✓ Disponible sur Vidzy${languages.length ? ` · ${languages.join(' · ')}` : ''}`;
     if (state.selectedItem) state.selectedItem.vidzyLanguages = status.languages || [];
+    [...$('#playLanguage').options].forEach(option => {
+      option.disabled = Boolean(option.value) && languages.length > 0 && !languages.includes(option.value.toUpperCase());
+    });
+    if ($('#playLanguage').selectedOptions[0]?.disabled) $('#playLanguage').value = '';
   } catch {
     $('#availability').textContent = '';
   }
@@ -878,7 +894,10 @@ function vidzyUrl() {
   if (selected.type !== 'movie') {
     url += `/${Math.max(0, Number($('#season').value) || 0)}/${Math.max(1, Number($('#episode').value) || 1)}`;
   }
-  return `${url}?autonext=1&color=765cff&info=title,year,rating,genres`;
+  const params = new URLSearchParams({ autonext: '1', color: '765cff', info: 'title,year,rating,genres' });
+  const language = $('#playLanguage').value;
+  if (language) params.set('lang', language);
+  return `${url}?${params}`;
 }
 
 function openPlayerPage() {
@@ -895,7 +914,8 @@ function openPlayerPage() {
   const durationMinutes = isMovie ? Number(state.selectedItem?.runtime || 0) : selectedEpisodeRuntime;
   const source = vidzyUrl();
   $('#inlinePlayerTitle').textContent = $('#modalTitle').textContent || 'Lecture Vidzy';
-  $('#inlinePlayerMeta').textContent = isMovie ? 'Film' : `Saison ${season} · Épisode ${episode}`;
+  const language = $('#playLanguage').value.toUpperCase();
+  $('#inlinePlayerMeta').textContent = `${isMovie ? 'Film' : `Saison ${season} · Épisode ${episode}`}${language ? ` · ${language}` : ''}`;
   $('#inlinePlayerExternal').href = source;
   $('#inlinePlayer').classList.remove('hidden', 'loaded');
   $('#inlinePlayerFrame').src = source;
@@ -911,8 +931,8 @@ function openPlayerPage() {
   $('#inlinePlayer').requestFullscreen?.().catch(() => {});
 }
 
-function saveInlineProgress() {
-  if (!inlineProgressContext || document.hidden) return;
+function saveInlineProgress(force = false) {
+  if (!inlineProgressContext || (document.hidden && !force)) return;
   const current = watchProgress[inlineProgressContext.key] || { seconds: 0 };
   watchProgress[inlineProgressContext.key] = {
     seconds: Math.min(Number(current.seconds || 0) + 5, Math.round(inlineProgressContext.durationSeconds * .95)),
@@ -922,8 +942,23 @@ function saveInlineProgress() {
   localStorage.setItem(progressKey, JSON.stringify(watchProgress));
 }
 
+function markCurrentEpisodeCompleted() {
+  if (!inlineProgressContext && state.selected?.type === 'movie') return;
+  const season = Math.max(0, Number($('#season').value) || 0);
+  const episode = Math.max(1, Number($('#episode').value) || 1);
+  const key = `series:${state.selected.id}:${season}:${episode}`;
+  const durationSeconds = Math.max(60, selectedEpisodeRuntime ? selectedEpisodeRuntime * 60 : 2700);
+  watchProgress[key] = { seconds: durationSeconds, durationSeconds, completed: true, updatedAt: Date.now() };
+  localStorage.setItem(progressKey, JSON.stringify(watchProgress));
+  const card = $(`#episodesList .episode-card[data-episode="${episode}"]`);
+  card?.classList.add('completed');
+  const title = card?.querySelector('h4');
+  if (title && !title.querySelector('.episode-status')) title.insertAdjacentHTML('beforeend', ' <span class="episode-status">✓ Terminé</span>');
+}
+
 function restoreDetailAfterPlayer(updateHistory = true) {
   if ($('#inlinePlayer').classList.contains('hidden')) return;
+  saveInlineProgress(true);
   window.clearInterval(inlineProgressTimer);
   inlineProgressTimer = 0;
   inlineProgressContext = null;
@@ -1030,11 +1065,13 @@ $('#play').onclick = openPlayerPage;
 $('#nextEpisode').onclick = () => {
   const nextEpisode = $('#nextEpisode').dataset.episode;
   if (!nextEpisode) return;
+  markCurrentEpisodeCompleted();
   const card = [...$('#episodesList').querySelectorAll('.episode-card')]
     .find(item => item.dataset.episode === nextEpisode);
   card?.click();
   card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 };
+$('#playLanguage').addEventListener('change', () => localStorage.setItem(languageKey, $('#playLanguage').value));
 $('#favoriteDetail').onclick = () => toggleFavorite(state.selectedItem);
 $('#season').addEventListener('change', () => {
   if (state.selected?.type !== 'movie') loadSeason(state.selected.id, Number($('#season').value), 1);

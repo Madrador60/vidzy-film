@@ -15,6 +15,8 @@ const TMDB_BASE = 'https://api.themoviedb.org/3';
 const LIVE_FEED = 'https://hesgoaler.com/madra.json';
 let liveCache = { expires: 0, channels: [] };
 const vidzyAvailabilityCache = new BoundedCache({ maxEntries: 2000, ttlMs: 10 * 60 * 1000 });
+const tmdbCache = new BoundedCache({ maxEntries: 1200, ttlMs: 10 * 60 * 1000 });
+const tmdbPending = new Map();
 const vidzyWaiters = [];
 let vidzyActiveChecks = 0;
 const VIDZY_MAX_CONCURRENT = 6;
@@ -96,17 +98,28 @@ async function tmdbRequest(endpoint, query = {}) {
   Object.entries(query).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
   });
-  const response = await fetch(url, {
-    headers: { accept: 'application/json', authorization: `Bearer ${TMDB_TOKEN}` },
-    signal: AbortSignal.timeout(15000)
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(data.status_message || `Erreur TMDB ${response.status}`);
-    error.status = response.status;
-    throw error;
-  }
-  return data;
+  const cacheKey = url.toString();
+  const cached = tmdbCache.get(cacheKey);
+  if (cached) return cached;
+  if (tmdbPending.has(cacheKey)) return tmdbPending.get(cacheKey);
+  const request = (async () => {
+    const response = await fetch(url, {
+      headers: { accept: 'application/json', authorization: `Bearer ${TMDB_TOKEN}` },
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.status_message || `Erreur TMDB ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    const ttl = endpoint.includes('/trending/') ? 5 * 60 * 1000 : 15 * 60 * 1000;
+    tmdbCache.set(cacheKey, data, ttl);
+    return data;
+  })();
+  tmdbPending.set(cacheKey, request);
+  try { return await request; }
+  finally { tmdbPending.delete(cacheKey); }
 }
 
 async function acquireVidzySlot() {

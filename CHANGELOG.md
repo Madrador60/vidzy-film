@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.0 — 2026-07-31
+
+- Accueil accéléré avec chargement progressif des sélections visibles.
+- Cache TMDB et regroupement des requêtes identiques côté serveur.
+- Choix Auto, VF ou VOSTFR mémorisé pour chaque profil.
+- Progression enrichie et épisodes terminés clairement identifiés.
+- Sélection d’un épisode immédiatement sauvegardée dans l’historique.
+
 ## 2.1.0
 
 - Nouvelle navigation dédiée Accueil, Animés, Tendances, TV et Sport.
