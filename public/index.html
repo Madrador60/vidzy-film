@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="styles.css?v=20">
+  <link rel="stylesheet" href="styles.css?v=21">
 </head>
 <body>
   <header class="site-header">
@@ -257,6 +257,7 @@
         </section>
         <div class="detail-actions">
           <button id="play" class="primary" type="button">▶ Regarder maintenant</button>
+          <label id="languageChoice" class="language-choice"><span>Version</span><select id="playLanguage" aria-label="Choisir la langue"><option value="">Auto</option><option value="vf">VF</option><option value="vostfr">VOSTFR</option></select></label>
           <button id="nextEpisode" class="secondary hidden" type="button">Épisode suivant →</button>
           <button id="favoriteDetail" class="secondary" type="button">♡ Ajouter à ma liste</button>
         </div>
@@ -279,6 +280,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=36"></script>
 </body>
 </html>

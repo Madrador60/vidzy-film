@@ -41,7 +41,7 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 
 ## Fonctionnalités
 
-- Navigation complète : Accueil, Films, Séries, Animés, Tendances, TV et Sport.
+- Navigation simplifiée : Accueil, Films, Séries et TV.
 - Accueil éditorial avec tendances quotidiennes, nouveautés et sélections par genre.
 - Recherche globale par titre ou artiste, avec filtres de type, année, note et historique récent.
 
@@ -50,12 +50,13 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 - recherche temporisée de films, séries et personnes avec annulation des requêtes obsolètes ;
 - fiche détaillée, casting cliquable et filmographie ;
 - bandes-annonces et recommandations ;
-- lecteur plein écran, retour vers la fiche et progression locale ;
+- lecteur plein écran, choix VF/VOSTFR, retour vers la fiche et progression locale ;
+- épisodes terminés et dernier épisode sélectionné mémorisés par profil ;
 - Ma liste, historique, suppression individuelle et suppression globale confirmée ;
 - profils locaux séparés, sans compte serveur ;
 - télévision et sport à partir du flux externe configuré ;
 - PWA installable avec page hors connexion ;
-- API protégée par CSP, Helmet, limitation de débit, validation et cache borné.
+- API protégée par CSP, Helmet, limitation de débit, validation, cache borné et déduplication des requêtes TMDB.
 
 ## Structure
 
