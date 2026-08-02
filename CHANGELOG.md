@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.0.0 — 2026-08-02
+
+- Nouvel espace personnel regroupant statistiques, reprises et Ma liste.
+- Sélecteur d’ambiance avec cinq recommandations instantanées.
+- Actions « Coup de cœur » et « Déjà regardé » mémorisées localement.
+- Bouton « Surprenez-moi » dans la bannière principale.
+- Nouvelle interface responsive pour la bibliothèque et les préférences.
+
 ## 3.0.0 — 2026-08-02
 
 - Fiches films et séries partageables avec une URL dédiée.

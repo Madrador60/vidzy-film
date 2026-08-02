@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
   <header class="site-header">
@@ -26,6 +26,7 @@
       <button id="installApp" class="install-app hidden" type="button">Installer</button>
       <button id="globalSearchBtn" class="global-search-button" type="button" aria-label="Rechercher partout">⌕ <span>Rechercher</span></button>
       <button id="favoritesBtn" class="favorites-link" type="button">♡ Ma liste <span id="favoritesCount">0</span></button>
+      <button id="libraryBtn" class="library-button" type="button">▦ Mon espace</button>
       <div class="profile-wrap">
         <button id="profileBtn" class="profile-button profile-single" type="button" aria-label="Profil Madra">
           <span id="profileAvatar" class="profile-avatar">M</span><span id="profileName">Madra</span>
@@ -34,6 +35,15 @@
       </div>
     </div>
   </header>
+
+  <div id="libraryPanel" class="library-panel hidden" role="dialog" aria-modal="true" aria-labelledby="libraryTitle" aria-hidden="true">
+    <div class="library-shell">
+      <div class="library-head"><div><p class="eyebrow">Votre Vidzy</p><h2 id="libraryTitle">Mon espace</h2></div><button id="libraryClose" class="modal-close" type="button" aria-label="Fermer mon espace">×</button></div>
+      <div class="library-stats"><article><strong id="libraryFavorites">0</strong><span>dans Ma liste</span></article><article><strong id="libraryHistory">0</strong><span>commencés</span></article><article><strong id="libraryLiked">0</strong><span>coups de cœur</span></article></div>
+      <section><div class="library-section-head"><h3>À reprendre</h3><span>Votre activité récente</span></div><div id="libraryHistoryRail" class="library-grid"></div></section>
+      <section><div class="library-section-head"><h3>Ma liste</h3><span>À regarder plus tard</span></div><div id="libraryFavoritesRail" class="library-grid"></div></section>
+    </div>
+  </div>
 
   <div id="globalSearch" class="global-search hidden" role="dialog" aria-modal="true" aria-labelledby="globalSearchTitle">
     <div class="global-search-panel">
@@ -103,6 +113,7 @@
         <div class="hero-actions">
           <button id="heroPlay" class="primary" disabled>▶ Regarder</button>
           <button id="browseBtn" class="secondary" disabled>ⓘ Plus d’infos</button>
+          <button id="surpriseBtn" class="secondary" type="button">⤨ Surprenez-moi</button>
         </div>
       </div>
       <div class="hero-carousel" aria-label="Sélection à la une">
@@ -120,6 +131,11 @@
       <div id="personalizedSection" class="rail-section hidden">
         <div class="rail-heading"><h2 id="personalizedTitle">Pour vous</h2><span>Selon vos envies</span></div>
         <div id="personalizedRail" class="media-rail"></div>
+      </div>
+      <div class="mood-hub rail-section">
+        <div class="rail-heading"><div><p class="eyebrow">Envie du moment</p><h2>Choisissez votre ambiance</h2></div><span>Une sélection instantanée</span></div>
+        <div id="moodButtons" class="mood-buttons"><button data-mood="action">⚡ Action</button><button data-mood="comedy">☺ Comédie</button><button data-mood="horror">☾ Frissons</button><button data-mood="animation">✦ Animation</button><button data-mood="scifi">◉ Science-fiction</button></div>
+        <div id="moodResult" class="mood-result hidden"><div class="library-section-head"><h3 id="moodTitle">Votre sélection</h3><button id="moodClose" type="button">Fermer</button></div><div id="moodRail" class="media-rail rail-loading"></div></div>
       </div>
       <div class="rail-section">
         <div class="rail-heading"><h2>Tendances du jour</h2><span>Ce que tout le monde regarde</span></div>
@@ -261,6 +277,8 @@
           <label id="languageChoice" class="language-choice"><span>Version</span><select id="playLanguage" aria-label="Choisir la langue"><option value="">Auto</option><option value="vf">VF</option><option value="vostfr">VOSTFR</option></select></label>
           <button id="nextEpisode" class="secondary hidden" type="button">Épisode suivant →</button>
           <button id="favoriteDetail" class="secondary" type="button">♡ Ajouter à ma liste</button>
+          <button id="likeDetail" class="secondary reaction-button" type="button">♡ J’aime</button>
+          <button id="watchedDetail" class="secondary reaction-button" type="button">✓ Déjà vu</button>
           <button id="shareDetail" class="secondary" type="button">↗ Partager</button>
         </div>
         <p id="availability" class="availability" aria-live="polite"></p>
@@ -282,6 +300,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=39"></script>
+  <script src="app.js?v=40"></script>
 </body>
 </html>
