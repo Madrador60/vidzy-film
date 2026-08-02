@@ -24,6 +24,14 @@ test('parse efficacement les chaînes et programmes XMLTV', async () => {
   assert.equal(parsed.programs.get('tf1.fr')[0].description, 'Actualités');
 });
 
+test('applique un décalage propre à une source sans modifier le parseur de date', async () => {
+  const parsed = await parseXmltvStream(Readable.from([XMLTV]), {
+    now: Date.parse('2026-08-02T08:00:00Z'), timeShiftMs: -8 * 3600000
+  });
+  assert.equal(parsed.programs.get('tf1.fr')[0].start.toISOString(), '2026-08-02T09:00:00.000Z');
+  assert.equal(parseXmltvDate('20260802190000 +0200').toISOString(), '2026-08-02T17:00:00.000Z');
+});
+
 test('associe les variantes IPTV aux chaînes EPG', () => {
   const service = new EpgService();
   service.snapshot.channels = new Map([['tf1.fr', { id: 'tf1.fr', names: ['TF1 HD'] }], ['bfm.fr', { id: 'bfm.fr', names: ['BFM TV'] }]]);
