@@ -18,7 +18,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="styles.css?v=27">
+  <link rel="stylesheet" href="styles.css?v=28">
 </head>
 <body>
   <header class="site-header">
@@ -195,8 +195,13 @@
         <label class="search-field"><span class="search-icon">⌕</span><input id="liveSearch" type="search" placeholder="Rechercher une chaîne…" autocomplete="off"></label>
         <select id="liveCategory" aria-label="Filtrer par catégorie"><option value="">Toutes les catégories</option></select>
         <select id="liveCountry" aria-label="Filtrer par pays"><option value="">Tous les pays</option></select>
-        <a class="epg-guide-link" href="https://epg.pw/areas/fr.html?lang=fr" target="_blank" rel="noopener noreferrer">▦ Programme TV France</a>
+        <button id="epgToggle" class="epg-guide-link" type="button">▦ Programme TV</button>
       </div>
+      <section id="epgPanel" class="epg-panel" aria-labelledby="epgTitle">
+        <div class="epg-panel-head"><div><p class="eyebrow">Guide français</p><h2 id="epgTitle">Programme TV</h2></div><a href="https://epg.pw/areas/fr.html?lang=fr" target="_blank" rel="noopener noreferrer">Source EPG.pw ↗</a></div>
+        <div class="epg-controls"><label for="epgChannel">Chaîne</label><select id="epgChannel"><option>TF1</option><option>France 2</option><option>France 3</option><option>Canal+</option><option>France 5</option><option>M6</option><option>Arte</option><option>C8</option><option>W9</option><option>TMC</option><option>TFX</option><option>NRJ 12</option><option>BFM TV</option><option>CNEWS</option><option>LCI</option><option>franceinfo:</option></select><button id="epgRefresh" type="button">Actualiser</button></div>
+        <div id="epgPrograms" class="epg-programs" aria-live="polite"><div class="epg-loading">Chargement du programme…</div></div>
+      </section>
       <div id="liveGrid" class="live-grid"><div class="live-loading">Chargement des chaînes…</div></div>
       <button id="liveMore" class="live-more hidden" type="button">Afficher plus de chaînes</button>
     </section>
@@ -309,6 +314,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=41"></script>
+  <script src="app.js?v=42"></script>
 </body>
 </html>

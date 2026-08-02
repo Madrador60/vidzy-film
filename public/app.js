@@ -14,6 +14,7 @@ const reactionsKey = `vidzy-reactions-v1-${activeProfile.id}`;
 let liveChannels = [];
 let liveLoaded = false;
 let liveVisibleLimit = 60;
+let epgLoaded = false;
 let globalSearchTimer = 0;
 let globalSearchItems = [];
 let globalSearchController = null;
@@ -434,10 +435,26 @@ async function enterLive(categoryHint = '', activeButton = $('#liveTab')) {
   history.replaceState(null, '', '#direct');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (!liveLoaded) await loadLiveChannels();
+  if (!epgLoaded) loadEpg();
   if (categoryHint) {
     const matching = [...$('#liveCategory').options].find(option => option.value.toLocaleLowerCase('fr').includes(categoryHint));
     if (matching) $('#liveCategory').value = matching.value;
     renderLiveChannels();
+  }
+}
+
+async function loadEpg() {
+  const channel = $('#epgChannel').value;
+  $('#epgPrograms').innerHTML = '<div class="epg-loading">Chargement du programme…</div>';
+  try {
+    const data = await json(`/api/epg?channel=${encodeURIComponent(channel)}`);
+    epgLoaded = true;
+    const programs = Array.isArray(data.programs) ? data.programs : [];
+    $('#epgPrograms').innerHTML = programs.length
+      ? programs.map(program => `<article class="epg-program"><time>${esc(program.time)}</time><strong>${esc(program.title)}</strong></article>`).join('')
+      : '<div class="live-empty">Aucun programme disponible pour cette chaîne.</div>';
+  } catch (error) {
+    $('#epgPrograms').innerHTML = retryMessage(error.message, 'epg');
   }
 }
 
@@ -1244,6 +1261,12 @@ $('#liveTab').onclick = () => enterLive('', $('#liveTab'));
 $('#liveSearch').addEventListener('input', () => { liveVisibleLimit = 60; renderLiveChannels(); });
 ['#liveCategory', '#liveCountry'].forEach(selector => $(selector).addEventListener('change', () => { liveVisibleLimit = 60; renderLiveChannels(); }));
 $('#liveMore').onclick = () => { liveVisibleLimit += 60; renderLiveChannels(); };
+$('#epgChannel').addEventListener('change', loadEpg);
+$('#epgRefresh').onclick = loadEpg;
+$('#epgToggle').onclick = () => {
+  $('#epgPanel').classList.toggle('collapsed');
+  $('#epgToggle').textContent = $('#epgPanel').classList.contains('collapsed') ? '▦ Afficher le programme TV' : '▦ Masquer le programme TV';
+};
 $('#globalSearchBtn').onclick = openGlobalSearch;
 $('#globalSearchClose').onclick = closeGlobalSearch;
 $('#globalSearch').addEventListener('click', event => { if (event.target === $('#globalSearch')) closeGlobalSearch(); });
@@ -1338,7 +1361,8 @@ document.addEventListener('click', event => {
   if (!button) return;
   const action = button.dataset.retry || '';
   if (action === 'catalogue') load();
-  else if (action === 'live') { liveLoaded = false; loadLive(); }
+  else if (action === 'live') { liveLoaded = false; loadLiveChannels(); }
+  else if (action === 'epg') loadEpg();
   else if (action.startsWith('mood:')) loadMood(action.slice(5));
   else if (action.startsWith('rail:')) {
     const selector = action.slice(5);
