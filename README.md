@@ -66,7 +66,7 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 - **Vidzy 3.0** : fiches partageables, recherche par genre, reprise des séries et interface recentrée.
 - **Direct** : lecture immédiate, plein écran, isolation des pop-ups et accès au guide TV français.
 
-Le guide est consultable sur [epg.pw — France](https://epg.pw/areas/fr.html?lang=en). Sa couverture dépend des chaînes référencées par ce service externe.
+Le guide est consultable en français sur [epg.pw — France](https://epg.pw/areas/fr.html?lang=fr). Sa couverture dépend des chaînes référencées par ce service externe.
 
 ## Structure
 
