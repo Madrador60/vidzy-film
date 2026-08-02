@@ -8,7 +8,9 @@
   const title = params.get('title') || 'Lecture Vidzy';
   const profile = /^[a-z0-9_-]{1,30}$/.test(params.get('profile') || '') ? params.get('profile') : 'madra';
   const durationMinutes = Math.max(0, Number.parseInt(params.get('duration') || '0', 10) || 0);
+  const language = /^(vf|vostfr)$/.test(params.get('lang') || '') ? params.get('lang') : '';
   const progressStorageKey = `vidzy-progress-v1-${profile}`;
+  const historyStorageKey = `vidzy-history-v2-${profile}`;
   const progressItemKey = type === 'movie' ? `movie:${id}` : `series:${id}:${season}:${episode}`;
   let progressItems = {};
   try { progressItems = JSON.parse(localStorage.getItem(progressStorageKey) || '{}') || {}; } catch { progressItems = {}; }
@@ -21,8 +23,18 @@
 
   document.querySelector('#watchTitle').textContent = title;
   document.querySelector('#watchMeta').textContent = type === 'movie'
-    ? 'Film'
-    : `Saison ${season} · Épisode ${episode}`;
+    ? `Film${language ? ` · ${language.toUpperCase()}` : ''}`
+    : `Saison ${season} · Épisode ${episode}${language ? ` · ${language.toUpperCase()}` : ''}`;
+
+  if (type === 'series') {
+    try {
+      const historyItems = JSON.parse(localStorage.getItem(historyStorageKey) || '[]');
+      const updated = historyItems.map(item => String(item.id) === String(id)
+        ? { ...item, lastSeason: season, lastEpisode: episode }
+        : item);
+      localStorage.setItem(historyStorageKey, JSON.stringify(updated));
+    } catch {}
+  }
 
   document.querySelector('#backBtn').addEventListener('click', () => {
     if (history.length > 1) history.back();
@@ -47,6 +59,7 @@
     color: '765cff',
     info: 'title,year,rating,genres,duration'
   });
+  if (language) options.set('lang', language);
   const source = `${base}?${options.toString()}`;
   directLink.href = source;
 

@@ -3,13 +3,9 @@ const $ = (selector) => document.querySelector(selector);
 const grid = $('#grid');
 const loading = $('#loading');
 const profiles = [
-  { id: 'madra', name: 'Madra', initial: 'M', color: '#7c6cff' },
-  { id: 'cinema', name: 'Cinéma', initial: 'C', color: '#7c9cff' },
-  { id: 'series', name: 'Séries', initial: 'S', color: '#ff7ca8' },
-  { id: 'invite', name: 'Invité', initial: 'I', color: '#ffc857' }
+  { id: 'madra', name: 'Madra', initial: 'M', color: '#7c6cff' }
 ];
-const activeProfileId = localStorage.getItem('vidzy-active-profile') || 'madra';
-const activeProfile = profiles.find(profile => profile.id === activeProfileId) || profiles[0];
+const activeProfile = profiles[0];
 const favoriteKey = `vidzy-favorites-v2-${activeProfile.id}`;
 const historyKey = `vidzy-history-v2-${activeProfile.id}`;
 const progressKey = `vidzy-progress-v1-${activeProfile.id}`;
@@ -30,6 +26,7 @@ let inlineProgressTimer = 0;
 let inlineProgressContext = null;
 let installPrompt = null;
 const loadedHomeRails = new Set();
+let globalGenresLoaded = false;
 function tmdbImageUrl(imagePath, size = 'w500') {
   const filename = String(imagePath || '').split('/').pop();
   return filename ? `/api/image/${size}/${encodeURIComponent(filename)}` : '';
@@ -98,18 +95,7 @@ function renderProfiles() {
   $('#profileAvatar').textContent = activeProfile.initial;
   $('#profileAvatar').style.background = activeProfile.color;
   $('#profileName').textContent = activeProfile.name;
-  $('#profileMenu').innerHTML = profiles.map(profile => `
-    <button class="profile-option ${profile.id === activeProfile.id ? 'active' : ''}" type="button" role="menuitem" data-profile="${profile.id}">
-      <span class="profile-option-avatar" style="background:${profile.color}">${profile.initial}</span>
-      <span><strong>${profile.name}</strong><small>${profile.id === activeProfile.id ? 'Profil actif' : 'Changer de profil'}</small></span>
-      ${profile.id === activeProfile.id ? '<span class="profile-option-check">✓</span>' : ''}
-    </button>`).join('');
-  $('#profileMenu').querySelectorAll('.profile-option').forEach(button => {
-    button.addEventListener('click', () => {
-      localStorage.setItem('vidzy-active-profile', button.dataset.profile);
-      location.reload();
-    });
-  });
+  $('#profileMenu').innerHTML = '';
 }
 
 async function init() {
@@ -125,6 +111,13 @@ async function init() {
     await refreshLocalCollections();
     await loadHome();
     if (location.hash === '#direct') enterLive();
+    const sharedParams = new URLSearchParams(location.search);
+    const sharedType = sharedParams.get('type');
+    const sharedId = sharedParams.get('id');
+    if ((sharedType === 'movie' || sharedType === 'serie') && /^\d+$/.test(sharedId || '')) {
+      await openItem(sharedType, sharedId, null, false);
+      history.replaceState({ vidzyDetail: true, sharedEntry: true }, '', location.href);
+    }
   } catch (error) {
     loading.textContent = `Impossible de démarrer : ${error.message}`;
   }
@@ -206,7 +199,20 @@ function openGlobalSearch() {
   $('#globalSearch').classList.remove('hidden');
   document.body.classList.add('no-scroll');
   renderRecentSearches();
+  loadGlobalGenres();
   window.setTimeout(() => $('#globalSearchInput').focus(), 0);
+}
+
+async function loadGlobalGenres() {
+  if (globalGenresLoaded) return;
+  globalGenresLoaded = true;
+  try {
+    const [movies, series] = await Promise.all([json('/api/genres/movie'), json('/api/genres/tv')]);
+    const genres = [...new Map([...(movies.genres || []), ...(series.genres || [])].map(genre => [genre.id, genre])).values()]
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    $('#globalSearchGenre').innerHTML = '<option value="">Tous les genres</option>'
+      + genres.map(genre => `<option value="${genre.id}">${esc(genre.name)}</option>`).join('');
+  } catch { globalGenresLoaded = false; }
 }
 
 function closeGlobalSearch() {
@@ -300,10 +306,12 @@ async function runGlobalSearch() {
     const selectedType = $('#globalSearchType').value;
     const selectedYear = String($('#globalSearchYear').value || '');
     const minimumRating = Number($('#globalSearchRating').value || 0);
+    const selectedGenre = Number($('#globalSearchGenre').value || 0);
     globalSearchItems = (data.results || []).filter(item =>
       (!selectedType || selectedType === item.type)
       && (!selectedYear || String(item.year) === selectedYear)
-      && Number(item.rating || 0) >= minimumRating);
+      && Number(item.rating || 0) >= minimumRating
+      && (!selectedGenre || (item.genreIds || []).includes(selectedGenre)));
     const people = selectedType && selectedType !== 'person' ? [] : (data.people || []);
     recentSearches = [query, ...recentSearches.filter(value => value.toLocaleLowerCase('fr') !== query.toLocaleLowerCase('fr'))].slice(0, 6);
     localStorage.setItem('vidzy-recent-searches-v1', JSON.stringify(recentSearches));
@@ -639,24 +647,32 @@ function updateHero(item) {
   $('#heroBackdrop').style.backgroundImage = item.backdrop ? `url("${item.backdrop}")` : 'none';
   $('#heroPlay').disabled = false;
   $('#browseBtn').disabled = false;
-  $('#heroPlay').onclick = () => openPlayerFromCard(item.type, item.id, item.title);
+  $('#heroPlay').onclick = () => {
+    const selected = featuredItems[featuredIndex] || item;
+    window.clearInterval(heroRotationTimer);
+    openPlayerFromCard(selected.type, selected.id, selected.title);
+  };
   $('#browseBtn').onclick = () => openItem(item.type, item.id, item);
 }
 
 function openPlayerFromCard(type, id, title) {
+  const remembered = watchHistory.find(entry => entry.type === type && String(entry.id) === String(id));
   const knownItem = state.selectedItem && String(state.selectedItem.id) === String(id)
     ? state.selectedItem
-    : { type, id: Number(id), title };
+    : (remembered || { type, id: Number(id), title });
   rememberWatch(knownItem);
   const page = new URL('/player.html', window.location.origin);
   page.searchParams.set('type', type === 'movie' ? 'movie' : 'series');
   page.searchParams.set('id', id);
   page.searchParams.set('title', title || 'Lecture Vidzy');
+  page.searchParams.set('profile', activeProfile.id);
+  const preferredLanguage = localStorage.getItem(languageKey) || '';
+  if (preferredLanguage) page.searchParams.set('lang', preferredLanguage);
 
   // Pour les séries, un clic sur l’affiche lance directement S01E01.
   if (type !== 'movie') {
-    page.searchParams.set('season', '1');
-    page.searchParams.set('episode', '1');
+    page.searchParams.set('season', String(Math.max(1, Number(knownItem.lastSeason) || 1)));
+    page.searchParams.set('episode', String(Math.max(1, Number(knownItem.lastEpisode) || 1)));
   }
 
   window.location.href = page.toString();
@@ -675,7 +691,7 @@ function updatePager() {
   ['#next', '#next2'].forEach((selector) => { $(selector).disabled = state.page >= state.totalPages; });
 }
 
-async function openItem(type, id, item = null) {
+async function openItem(type, id, item = null, syncUrl = true) {
   try {
     state.selected = { type, id };
     state.selectedItem = item;
@@ -683,6 +699,12 @@ async function openItem(type, id, item = null) {
     $('#modal').classList.remove('hidden');
     $('#modal').setAttribute('aria-hidden', 'false');
     document.body.classList.add('no-scroll');
+    if (syncUrl) {
+      const detailUrl = new URL(location.origin + location.pathname);
+      detailUrl.searchParams.set('type', type);
+      detailUrl.searchParams.set('id', String(id));
+      history.pushState({ vidzyDetail: true }, '', detailUrl);
+    }
     $('#modalHero').classList.remove('hidden');
     $('#modalCard').scrollTop = 0;
     $('#availability').textContent = '';
@@ -932,7 +954,14 @@ function openPlayerPage() {
   window.clearInterval(inlineProgressTimer);
   inlineProgressTimer = window.setInterval(saveInlineProgress, 5000);
   history.pushState({ vidzyPlayer: true }, '', location.href);
-  $('#inlinePlayer').requestFullscreen?.().catch(() => {});
+  const videoFrame = $('#inlinePlayerFrame');
+  if (videoFrame.requestFullscreen) {
+    videoFrame.requestFullscreen({ navigationUI: 'hide' }).catch(() => {
+      $('#inlinePlayer').requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
+    });
+  } else {
+    $('#inlinePlayer').requestFullscreen?.().catch(() => {});
+  }
 }
 
 function saveInlineProgress(force = false) {
@@ -1044,6 +1073,8 @@ function closeModal() {
   $('#modal').setAttribute('aria-hidden', 'true');
   $('#modalHero').classList.remove('hidden');
   document.body.classList.remove('no-scroll');
+  if (history.state?.vidzyDetail && !history.state.sharedEntry) history.back();
+  else if (location.search) history.replaceState(null, '', location.pathname);
 }
 $('#close').onclick = closeModal;
 $('#modal').onclick = (event) => { if (event.target === $('#modal')) $('#close').click(); };
@@ -1117,7 +1148,7 @@ $('#globalSearchInput').addEventListener('input', () => {
   window.clearTimeout(globalSearchTimer);
   globalSearchTimer = window.setTimeout(runGlobalSearch, 320);
 });
-['#globalSearchType', '#globalSearchYear', '#globalSearchRating'].forEach(selector => {
+['#globalSearchType', '#globalSearchGenre', '#globalSearchYear', '#globalSearchRating'].forEach(selector => {
   $(selector).addEventListener('change', () => {
     if ($('#globalSearchInput').value.trim().length >= 2) runGlobalSearch();
   });
@@ -1126,6 +1157,7 @@ $('#globalSearchClear').onclick = () => {
   globalSearchController?.abort();
   $('#globalSearchInput').value = '';
   $('#globalSearchType').value = '';
+  $('#globalSearchGenre').value = '';
   $('#globalSearchYear').value = '';
   $('#globalSearchRating').value = '0';
   globalSearchItems = [];
@@ -1136,6 +1168,28 @@ $('#heroPrev').onclick = () => { showFeatured(featuredIndex - 1); startHeroRotat
 $('#heroNext').onclick = () => { showFeatured(featuredIndex + 1); startHeroRotation(); };
 $('#hero').addEventListener('mouseenter', () => window.clearInterval(heroRotationTimer));
 $('#hero').addEventListener('mouseleave', startHeroRotation);
+$('#hero').addEventListener('pointerdown', () => window.clearInterval(heroRotationTimer));
+$('#hero').addEventListener('focusin', () => window.clearInterval(heroRotationTimer));
+$('#shareDetail').onclick = async () => {
+  if (!state.selected) return;
+  const shareUrl = new URL(location.origin + location.pathname);
+  shareUrl.searchParams.set('type', state.selected.type);
+  shareUrl.searchParams.set('id', String(state.selected.id));
+  const shareData = { title: $('#modalTitle').textContent, text: `Découvrez ${$('#modalTitle').textContent} sur Vidzy`, url: shareUrl.href };
+  try {
+    if (navigator.share) await navigator.share(shareData);
+    else await navigator.clipboard.writeText(shareUrl.href);
+    $('#shareDetail').textContent = '✓ Lien partagé';
+    window.setTimeout(() => { $('#shareDetail').textContent = '↗ Partager'; }, 1800);
+  } catch {}
+};
+window.addEventListener('popstate', () => {
+  const params = new URLSearchParams(location.search);
+  const type = params.get('type');
+  const id = params.get('id');
+  if ((type === 'movie' || type === 'serie') && /^\d+$/.test(id || '')) openItem(type, id, null, false);
+  else if (!$('#modal').classList.contains('hidden')) closeModal();
+});
 $('#inlinePlayerBack').onclick = closeInlinePlayer;
 $('#inlinePlayerFrame').addEventListener('load', () => $('#inlinePlayer').classList.add('loaded'));
 document.addEventListener('fullscreenchange', () => {
@@ -1147,17 +1201,6 @@ window.addEventListener('popstate', () => {
   if (!$('#inlinePlayer').classList.contains('hidden')) restoreDetailAfterPlayer(false);
 });
 window.addEventListener('pagehide', saveInlineProgress);
-$('#profileBtn').onclick = () => {
-  const opening = $('#profileMenu').classList.contains('hidden');
-  $('#profileMenu').classList.toggle('hidden', !opening);
-  $('#profileBtn').setAttribute('aria-expanded', String(opening));
-};
-document.addEventListener('click', event => {
-  if (!event.target.closest('.profile-wrap')) {
-    $('#profileMenu').classList.add('hidden');
-    $('#profileBtn').setAttribute('aria-expanded', 'false');
-  }
-});
 window.addEventListener('pageshow', () => {
   try { watchProgress = JSON.parse(localStorage.getItem(progressKey) || '{}') || {}; } catch { watchProgress = {}; }
   renderHistory();

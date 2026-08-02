@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="styles.css?v=21">
+  <link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
   <header class="site-header">
@@ -27,10 +27,10 @@
       <button id="globalSearchBtn" class="global-search-button" type="button" aria-label="Rechercher partout">⌕ <span>Rechercher</span></button>
       <button id="favoritesBtn" class="favorites-link" type="button">♡ Ma liste <span id="favoritesCount">0</span></button>
       <div class="profile-wrap">
-        <button id="profileBtn" class="profile-button" type="button" aria-haspopup="menu" aria-expanded="false">
-          <span id="profileAvatar" class="profile-avatar">M</span><span id="profileName">Madra</span><span class="profile-chevron">⌄</span>
+        <button id="profileBtn" class="profile-button profile-single" type="button" aria-label="Profil Madra">
+          <span id="profileAvatar" class="profile-avatar">M</span><span id="profileName">Madra</span>
         </button>
-        <div id="profileMenu" class="profile-menu hidden" role="menu" aria-label="Choisir un profil"></div>
+        <div id="profileMenu" class="profile-menu hidden" aria-hidden="true"></div>
       </div>
     </div>
   </header>
@@ -52,6 +52,7 @@
           <option value="movie">Films</option>
           <option value="serie">Séries</option>
         </select>
+        <select id="globalSearchGenre" aria-label="Filtrer la recherche par genre"><option value="">Tous les genres</option></select>
         <input id="globalSearchYear" type="number" min="1880" max="2100" placeholder="Année" aria-label="Filtrer par année">
         <select id="globalSearchRating" aria-label="Filtrer par note minimale">
           <option value="0">Toutes les notes</option>
@@ -260,6 +261,7 @@
           <label id="languageChoice" class="language-choice"><span>Version</span><select id="playLanguage" aria-label="Choisir la langue"><option value="">Auto</option><option value="vf">VF</option><option value="vostfr">VOSTFR</option></select></label>
           <button id="nextEpisode" class="secondary hidden" type="button">Épisode suivant →</button>
           <button id="favoriteDetail" class="secondary" type="button">♡ Ajouter à ma liste</button>
+          <button id="shareDetail" class="secondary" type="button">↗ Partager</button>
         </div>
         <p id="availability" class="availability" aria-live="polite"></p>
         <section id="trailerSection" class="trailer-section hidden" aria-labelledby="trailerTitle">
@@ -280,6 +282,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=37"></script>
+  <script src="app.js?v=39"></script>
 </body>
 </html>
