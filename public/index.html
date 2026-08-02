@@ -18,7 +18,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="stylesheet" href="styles.css?v=30">
 </head>
 <body>
   <header class="site-header">
@@ -189,7 +189,7 @@
     <section id="liveView" class="live-view hidden" aria-labelledby="liveTitle">
       <div class="live-heading">
         <div><p class="eyebrow">Télévision en direct</p><h1 id="liveTitle">Le direct, maintenant.</h1><p>Retrouvez les chaînes disponibles et lancez la lecture instantanément.</p></div>
-        <div class="live-status"><span class="live-dot"></span><strong id="liveCount">Chargement…</strong></div>
+        <div class="live-status"><span class="live-dot"></span><strong id="liveCount">Chargement…</strong><time id="liveClock" datetime="">--:--</time></div>
       </div>
       <div class="live-toolbar">
         <label class="search-field"><span class="search-icon">⌕</span><input id="liveSearch" type="search" placeholder="Rechercher une chaîne…" autocomplete="off"></label>
@@ -315,6 +315,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=43"></script>
+  <script src="app.js?v=44"></script>
 </body>
 </html>

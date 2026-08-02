@@ -13,9 +13,11 @@ const languageKey = `vidzy-language-v1-${activeProfile.id}`;
 const reactionsKey = `vidzy-reactions-v1-${activeProfile.id}`;
 let liveChannels = [];
 let liveEpg = {};
+let liveEpgLoaded = false;
 let liveLoaded = false;
 let liveVisibleLimit = 60;
 let epgLoaded = false;
+let liveClockTimer = 0;
 let globalSearchTimer = 0;
 let globalSearchItems = [];
 let globalSearchController = null;
@@ -435,6 +437,11 @@ async function enterLive(categoryHint = '', activeButton = $('#liveTab')) {
   $('#liveView').classList.remove('hidden');
   history.replaceState(null, '', '#direct');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  updateLiveClock();
+  if (!liveClockTimer) liveClockTimer = window.setInterval(() => {
+    updateLiveClock();
+    if (liveLoaded) loadEpgOverview();
+  }, 60_000);
   if (!liveLoaded) await loadLiveChannels();
   if (!epgLoaded) loadEpg();
   if (categoryHint) {
@@ -451,16 +458,15 @@ async function loadEpg() {
     const data = await json(`/api/epg?channel=${encodeURIComponent(channel)}`);
     epgLoaded = true;
     const programs = Array.isArray(data.programs) ? data.programs : [];
-    const formatTime = value => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
     $('#epgPrograms').innerHTML = programs.length
-      ? programs.map((program, index) => `<button class="epg-program ${program.current ? 'current' : ''}" type="button" data-epg-index="${index}"><time>${formatTime(program.start)}–${formatTime(program.end)}</time><strong>${esc(program.title)}</strong>${program.current ? `<span class="epg-progress"><span style="width:${Math.max(0, Math.min(100, Number(program.progress) || 0))}%"></span></span>` : ''}</button>`).join('')
+      ? programs.map((program, index) => `<button class="epg-program ${program.current ? 'current' : ''}" type="button" data-epg-index="${index}"><time>${formatEpgTime(program.start)}–${formatEpgTime(program.end)}</time><strong>${esc(program.title)}</strong>${program.current ? `<span class="epg-progress"><span style="width:${Math.max(0, Math.min(100, Number(program.progress) || 0))}%"></span></span>` : ''}</button>`).join('')
       : '<div class="live-empty">Aucun programme disponible pour cette chaîne.</div>';
     $('#epgDetail').classList.add('hidden');
     $('#epgPrograms').querySelectorAll('[data-epg-index]').forEach(button => {
       button.onclick = () => {
         const program = programs[Number(button.dataset.epgIndex)];
         if (!program) return;
-        $('#epgDetail').innerHTML = `<strong>${esc(program.title)}</strong><span>${formatTime(program.start)}–${formatTime(program.end)}${program.category ? ` · ${esc(program.category)}` : ''}</span><p>${esc(program.description || 'Aucune description disponible.')}</p>`;
+        $('#epgDetail').innerHTML = `<strong>${esc(program.title)}</strong><span>${formatEpgTime(program.start)}–${formatEpgTime(program.end)}${program.category ? ` · ${esc(program.category)}` : ''}</span><p>${esc(program.description || 'Aucune description disponible.')}</p>`;
         $('#epgDetail').classList.remove('hidden');
       };
     });
@@ -469,12 +475,33 @@ async function loadEpg() {
   }
 }
 
+function formatEpgTime(value = Date.now()) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--:--';
+  return new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Paris'
+  }).format(date);
+}
+
+function updateLiveClock() {
+  const clock = $('#liveClock');
+  if (!clock) return;
+  const now = new Date();
+  clock.textContent = formatEpgTime(now);
+  clock.dateTime = now.toISOString();
+}
+
 async function loadEpgOverview() {
   try {
     const data = await json('/api/epg-overview');
     liveEpg = data.channels || {};
+    liveEpgLoaded = true;
     renderLiveChannels();
-  } catch { liveEpg = {}; }
+  } catch {
+    liveEpg = {};
+    liveEpgLoaded = true;
+    renderLiveChannels();
+  }
 }
 
 async function loadLiveChannels() {
@@ -517,10 +544,16 @@ function renderLiveChannels() {
     target.searchParams.set('ch', channel.id);
     target.searchParams.set('name', channel.name);
     const guide = liveEpg[channel.name];
+    const current = guide?.current;
+    const next = guide?.next;
+    const programMarkup = current
+      ? `<span class="live-program"><span class="live-program-label">Maintenant · ${formatEpgTime(current.start)}–${formatEpgTime(current.end)}</span><strong>${esc(current.title)}</strong><span class="live-now-progress" aria-label="Progression ${Math.max(0, Math.min(100, Number(current.progress) || 0))} %"><span style="width:${Math.max(0, Math.min(100, Number(current.progress) || 0))}%"></span></span>${next ? `<span class="live-next"><b>${formatEpgTime(next.start)}</b> · ${esc(next.title)}</span>` : ''}</span>`
+      : `<span class="live-program live-program-empty">${liveEpgLoaded ? 'Programme non renseigné' : 'Programme en cours de chargement…'}</span>`;
     return `<a class="live-card" href="${target.pathname}${target.search}">
       <span class="live-badge"><span class="live-dot"></span> EN DIRECT</span>
       ${channel.image ? `<img loading="lazy" src="${esc(channel.image)}" alt="Logo ${esc(channel.name)}">` : `<span class="live-card-logo-fallback">${esc(channel.name.slice(0, 1))}</span>`}
-      <span class="live-card-info"><strong>${esc(channel.name)}</strong><span>${esc(channel.country)} · ${esc(channel.category)}</span>${guide?.current ? `<span class="live-now">Maintenant : ${esc(guide.current.title)}</span><span class="live-now-progress"><span style="width:${Number(guide.current.progress) || 0}%"></span></span>` : ''}${guide?.next ? `<span class="live-next">Ensuite : ${esc(guide.next.title)}</span>` : ''}</span>
+      <span class="live-card-info"><strong>${esc(channel.name)}</strong><span>${esc(channel.country)} · ${esc(channel.category)}</span></span>
+      ${programMarkup}
     </a>`;
   }).join('');
 }
