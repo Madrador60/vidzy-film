@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.0 — 2026-08-02
+
+- Fiches films et séries partageables avec une URL dédiée.
+- Partage natif ou copie du lien depuis chaque fiche.
+- Recherche globale filtrable par genre, type, année et note.
+- Reprise directe de la dernière saison et du dernier épisode depuis l’accueil.
+- Bannière stabilisée pendant les interactions pour éviter de lancer un autre titre.
+- En-tête recentré, logo modernisé et profil unique Madra.
+- Cartes de reprise compactes et hero rééquilibré sur les grands écrans.
+- Direct protégé : plein écran, retour simplifié, lien externe retiré et pop-ups publicitaires isolés.
+- Le bouton « Regarder maintenant » place directement le flux vidéo en plein écran.
+
 ## 2.2.0 — 2026-07-31
 
 - Images TMDB servies par Vidzy pour éviter leur blocage dans Chrome.
