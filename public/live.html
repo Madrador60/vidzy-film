@@ -5,19 +5,24 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <title>Direct — Vidzy</title>
-  <link rel="stylesheet" href="live.css?v=4">
+  <link rel="stylesheet" href="live.css?v=5">
 </head>
 <body>
   <header>
     <button id="backBtn" type="button">← Direct</button>
     <div><span class="live-dot"></span><strong id="channelName">Chaîne en direct</strong></div>
-    <button id="fullscreenBtn" class="fullscreen-button" type="button">⛶ Plein écran</button>
+    <div class="zapping-actions">
+      <button id="previousChannel" type="button" aria-label="Chaîne précédente">‹ Précédente</button>
+      <span id="channelPosition" aria-live="polite"></span>
+      <button id="nextChannel" type="button" aria-label="Chaîne suivante">Suivante ›</button>
+      <button id="fullscreenBtn" class="fullscreen-button" type="button">⛶ Plein écran</button>
+    </div>
   </header>
   <main>
     <div id="error" class="notice hidden">Cette chaîne est invalide ou indisponible.</div>
     <iframe id="livePlayer" title="Lecteur de télévision en direct" sandbox="allow-scripts allow-same-origin allow-presentation" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="no-referrer"></iframe>
     <div id="adShield" class="ad-shield" aria-label="Interactions publicitaires bloquées"></div>
   </main>
-  <script src="live.js?v=4"></script>
+  <script src="live.js?v=5"></script>
 </body>
 </html>
