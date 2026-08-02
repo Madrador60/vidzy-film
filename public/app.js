@@ -10,6 +10,7 @@ const favoriteKey = `vidzy-favorites-v2-${activeProfile.id}`;
 const historyKey = `vidzy-history-v2-${activeProfile.id}`;
 const progressKey = `vidzy-progress-v1-${activeProfile.id}`;
 const languageKey = `vidzy-language-v1-${activeProfile.id}`;
+const reactionsKey = `vidzy-reactions-v1-${activeProfile.id}`;
 let liveChannels = [];
 let liveLoaded = false;
 let liveVisibleLimit = 60;
@@ -40,7 +41,9 @@ function readLocalList(key) {
 let favorites = readLocalList(favoriteKey);
 let watchHistory = readLocalList(historyKey);
 let watchProgress = {};
+let reactions = { liked: [], watched: [] };
 try { watchProgress = JSON.parse(localStorage.getItem(progressKey) || '{}') || {}; } catch { watchProgress = {}; }
+try { reactions = { ...reactions, ...(JSON.parse(localStorage.getItem(reactionsKey) || '{}') || {}) }; } catch {}
 $('#playLanguage').value = localStorage.getItem(languageKey) || '';
 if (activeProfile.id === 'madra' && !localStorage.getItem('vidzy-profile-migration-v2')) {
   if (!favorites.length) favorites = readLocalList('vidzy-favorites-v1');
@@ -69,6 +72,30 @@ function toggleFavorite(item) {
     button.textContent = isFavorite(item.type, item.id) ? '♥' : '♡';
   });
   updateDetailFavorite();
+}
+
+function mediaKey(item = state.selectedItem) {
+  return item ? `${item.type}:${item.id}` : '';
+}
+
+function toggleReaction(kind) {
+  const key = mediaKey();
+  if (!key || !Array.isArray(reactions[kind])) return;
+  reactions[kind] = reactions[kind].includes(key)
+    ? reactions[kind].filter(entry => entry !== key)
+    : [key, ...reactions[kind]].slice(0, 200);
+  localStorage.setItem(reactionsKey, JSON.stringify(reactions));
+  updateDetailReactions();
+}
+
+function updateDetailReactions() {
+  const key = mediaKey();
+  const liked = reactions.liked.includes(key);
+  const watched = reactions.watched.includes(key);
+  $('#likeDetail').classList.toggle('active', liked);
+  $('#likeDetail').textContent = liked ? '♥ Coup de cœur' : '♡ J’aime';
+  $('#watchedDetail').classList.toggle('active', watched);
+  $('#watchedDetail').textContent = watched ? '✓ Déjà regardé' : '✓ Déjà vu';
 }
 
 function esc(value = '') {
@@ -474,6 +501,45 @@ function renderRail(selector, items, ranked = false) {
   }
 }
 
+function renderLibrary() {
+  $('#libraryFavorites').textContent = favorites.length;
+  $('#libraryHistory').textContent = watchHistory.length;
+  $('#libraryLiked').textContent = reactions.liked.length;
+  const renderGroup = (selector, items, emptyText) => {
+    const container = $(selector);
+    container.innerHTML = items.length ? railMarkup(items.slice(0, 8)) : `<p class="library-empty">${emptyText}</p>`;
+    if (items.length) bindRail(container, items);
+  };
+  renderGroup('#libraryHistoryRail', watchHistory, 'Aucune lecture commencée pour le moment.');
+  renderGroup('#libraryFavoritesRail', favorites, 'Ajoutez des titres à Ma liste pour les retrouver ici.');
+}
+
+const moodConfig = {
+  action: { title: 'Énergie maximale', url: '/api/catalog/movie?page=1&sort=popularity.desc&genre=28' },
+  comedy: { title: 'Une soirée légère', url: '/api/catalog/movie?page=1&sort=popularity.desc&genre=35' },
+  horror: { title: 'Frissons garantis', url: '/api/catalog/movie?page=1&sort=popularity.desc&genre=27' },
+  animation: { title: 'Univers animés', url: '/api/catalog/series?page=1&sort=popularity.desc&genre=16' },
+  scifi: { title: 'Voyage au-delà du réel', url: '/api/catalog/movie?page=1&sort=popularity.desc&genre=878' }
+};
+
+async function loadMood(mood) {
+  const config = moodConfig[mood];
+  if (!config) return;
+  $('#moodButtons').querySelectorAll('button').forEach(button => button.classList.toggle('active', button.dataset.mood === mood));
+  $('#moodTitle').textContent = config.title;
+  $('#moodResult').classList.remove('hidden');
+  $('#moodRail').classList.add('rail-loading');
+  $('#moodRail').innerHTML = '';
+  try {
+    const data = await json(config.url);
+    renderRail('#moodRail', data.results || []);
+    $('#moodResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (error) {
+    $('#moodRail').classList.remove('rail-loading');
+    $('#moodRail').innerHTML = `<p class="library-empty">${esc(error.message)}</p>`;
+  }
+}
+
 function renderHistory() {
   const section = $('#continueSection');
   section.classList.toggle('hidden', !watchHistory.length);
@@ -542,7 +608,8 @@ function observeHomeRail(config) {
 }
 
 async function loadPersonalizedRail() {
-  const source = watchHistory[0] || favorites[0];
+  const knownItems = [...watchHistory, ...favorites];
+  const source = knownItems.find(item => reactions.liked.includes(mediaKey(item))) || watchHistory[0] || favorites[0];
   const section = $('#personalizedSection');
   if (!source) {
     section.classList.add('hidden');
@@ -771,6 +838,7 @@ async function openItem(type, id, item = null, syncUrl = true) {
     };
     if (type === 'movie') await showVidzyStatus(id);
     updateDetailFavorite();
+    updateDetailReactions();
     const isMovie = type === 'movie';
     $('#seriesControls').classList.toggle('hidden', isMovie);
     $('#nextEpisode').classList.add('hidden');
@@ -1084,6 +1152,8 @@ document.addEventListener('keydown', (event) => {
     closeInlinePlayer();
   } else if (!$('#personPage').classList.contains('hidden')) {
     closePerson();
+  } else if (!$('#libraryPanel').classList.contains('hidden')) {
+    $('#libraryClose').click();
   } else if (!$('#profileMenu').classList.contains('hidden')) {
     $('#profileMenu').classList.add('hidden');
     $('#profileBtn').setAttribute('aria-expanded', 'false');
@@ -1108,6 +1178,8 @@ $('#nextEpisode').onclick = () => {
 };
 $('#playLanguage').addEventListener('change', () => localStorage.setItem(languageKey, $('#playLanguage').value));
 $('#favoriteDetail').onclick = () => toggleFavorite(state.selectedItem);
+$('#likeDetail').onclick = () => toggleReaction('liked');
+$('#watchedDetail').onclick = () => toggleReaction('watched');
 $('#season').addEventListener('change', () => {
   if (state.selected?.type !== 'movie') loadSeason(state.selected.id, Number($('#season').value), 1);
 });
@@ -1166,6 +1238,11 @@ $('#globalSearchClear').onclick = () => {
 };
 $('#heroPrev').onclick = () => { showFeatured(featuredIndex - 1); startHeroRotation(); };
 $('#heroNext').onclick = () => { showFeatured(featuredIndex + 1); startHeroRotation(); };
+$('#surpriseBtn').onclick = () => {
+  const candidates = featuredItems.filter(item => String(item.id) !== String(state.selectedItem?.id));
+  const item = candidates[Math.floor(Math.random() * candidates.length)] || featuredItems[0];
+  if (item) openItem(item.type, item.id, item);
+};
 $('#hero').addEventListener('mouseenter', () => window.clearInterval(heroRotationTimer));
 $('#hero').addEventListener('mouseleave', startHeroRotation);
 $('#hero').addEventListener('pointerdown', () => window.clearInterval(heroRotationTimer));
@@ -1182,6 +1259,23 @@ $('#shareDetail').onclick = async () => {
     $('#shareDetail').textContent = '✓ Lien partagé';
     window.setTimeout(() => { $('#shareDetail').textContent = '↗ Partager'; }, 1800);
   } catch {}
+};
+$('#libraryBtn').onclick = () => {
+  renderLibrary();
+  $('#libraryPanel').classList.remove('hidden');
+  $('#libraryPanel').setAttribute('aria-hidden', 'false');
+  document.body.classList.add('no-scroll');
+};
+$('#libraryClose').onclick = () => {
+  $('#libraryPanel').classList.add('hidden');
+  $('#libraryPanel').setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('no-scroll');
+};
+$('#libraryPanel').onclick = event => { if (event.target === $('#libraryPanel')) $('#libraryClose').click(); };
+$('#moodButtons').querySelectorAll('button').forEach(button => button.addEventListener('click', () => loadMood(button.dataset.mood)));
+$('#moodClose').onclick = () => {
+  $('#moodResult').classList.add('hidden');
+  $('#moodButtons').querySelectorAll('button').forEach(button => button.classList.remove('active'));
 };
 window.addEventListener('popstate', () => {
   const params = new URLSearchParams(location.search);
