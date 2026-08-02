@@ -7,6 +7,7 @@
 - Actions « Coup de cœur » et « Déjà regardé » mémorisées localement.
 - Bouton « Surprenez-moi » dans la bannière principale.
 - Nouvelle interface responsive pour la bibliothèque et les préférences.
+- Direct lancé sans écran intermédiaire et ajout du guide TV français epg.pw.
 
 ## 3.0.0 — 2026-08-02
 

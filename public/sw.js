@@ -1,6 +1,6 @@
 'use strict';
 
-const STATIC_CACHE = 'vidzy-static-v7';
+const STATIC_CACHE = 'vidzy-static-v8';
 const IMAGE_CACHE = 'vidzy-images-v1';
 const SHELL = ['/', '/offline.html', '/styles.css', '/app.js', '/manifest.webmanifest', '/icon.svg'];
 
