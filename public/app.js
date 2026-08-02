@@ -12,6 +12,7 @@ const progressKey = `vidzy-progress-v1-${activeProfile.id}`;
 const languageKey = `vidzy-language-v1-${activeProfile.id}`;
 const reactionsKey = `vidzy-reactions-v1-${activeProfile.id}`;
 let liveChannels = [];
+let liveEpg = {};
 let liveLoaded = false;
 let liveVisibleLimit = 60;
 let epgLoaded = false;
@@ -450,12 +451,30 @@ async function loadEpg() {
     const data = await json(`/api/epg?channel=${encodeURIComponent(channel)}`);
     epgLoaded = true;
     const programs = Array.isArray(data.programs) ? data.programs : [];
+    const formatTime = value => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
     $('#epgPrograms').innerHTML = programs.length
-      ? programs.map(program => `<article class="epg-program"><time>${esc(program.time)}</time><strong>${esc(program.title)}</strong></article>`).join('')
+      ? programs.map((program, index) => `<button class="epg-program ${program.current ? 'current' : ''}" type="button" data-epg-index="${index}"><time>${formatTime(program.start)}–${formatTime(program.end)}</time><strong>${esc(program.title)}</strong>${program.current ? `<span class="epg-progress"><span style="width:${Math.max(0, Math.min(100, Number(program.progress) || 0))}%"></span></span>` : ''}</button>`).join('')
       : '<div class="live-empty">Aucun programme disponible pour cette chaîne.</div>';
+    $('#epgDetail').classList.add('hidden');
+    $('#epgPrograms').querySelectorAll('[data-epg-index]').forEach(button => {
+      button.onclick = () => {
+        const program = programs[Number(button.dataset.epgIndex)];
+        if (!program) return;
+        $('#epgDetail').innerHTML = `<strong>${esc(program.title)}</strong><span>${formatTime(program.start)}–${formatTime(program.end)}${program.category ? ` · ${esc(program.category)}` : ''}</span><p>${esc(program.description || 'Aucune description disponible.')}</p>`;
+        $('#epgDetail').classList.remove('hidden');
+      };
+    });
   } catch (error) {
     $('#epgPrograms').innerHTML = retryMessage(error.message, 'epg');
   }
+}
+
+async function loadEpgOverview() {
+  try {
+    const data = await json('/api/epg-overview');
+    liveEpg = data.channels || {};
+    renderLiveChannels();
+  } catch { liveEpg = {}; }
 }
 
 async function loadLiveChannels() {
@@ -469,6 +488,7 @@ async function loadLiveChannels() {
     $('#liveCategory').innerHTML = '<option value="">Toutes les catégories</option>' + categories.map(value => `<option>${esc(value)}</option>`).join('');
     $('#liveCountry').innerHTML = '<option value="">Tous les pays</option>' + countries.map(value => `<option>${esc(value)}</option>`).join('');
     renderLiveChannels();
+    loadEpgOverview();
   } catch (error) {
     $('#liveGrid').innerHTML = retryMessage('Impossible de charger le direct.', 'live');
     $('#liveCount').textContent = 'Indisponible';
@@ -496,10 +516,11 @@ function renderLiveChannels() {
     const target = new URL('/live.html', location.origin);
     target.searchParams.set('ch', channel.id);
     target.searchParams.set('name', channel.name);
+    const guide = liveEpg[channel.name];
     return `<a class="live-card" href="${target.pathname}${target.search}">
       <span class="live-badge"><span class="live-dot"></span> EN DIRECT</span>
       ${channel.image ? `<img loading="lazy" src="${esc(channel.image)}" alt="Logo ${esc(channel.name)}">` : `<span class="live-card-logo-fallback">${esc(channel.name.slice(0, 1))}</span>`}
-      <span class="live-card-info"><strong>${esc(channel.name)}</strong><span>${esc(channel.country)} · ${esc(channel.category)}</span></span>
+      <span class="live-card-info"><strong>${esc(channel.name)}</strong><span>${esc(channel.country)} · ${esc(channel.category)}</span>${guide?.current ? `<span class="live-now">Maintenant : ${esc(guide.current.title)}</span><span class="live-now-progress"><span style="width:${Number(guide.current.progress) || 0}%"></span></span>` : ''}${guide?.next ? `<span class="live-next">Ensuite : ${esc(guide.next.title)}</span>` : ''}</span>
     </a>`;
   }).join('');
 }
