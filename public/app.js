@@ -30,6 +30,10 @@ let inlineProgressTimer = 0;
 let inlineProgressContext = null;
 let installPrompt = null;
 const loadedHomeRails = new Set();
+function tmdbImageUrl(imagePath, size = 'w500') {
+  const filename = String(imagePath || '').split('/').pop();
+  return filename ? `/api/image/${size}/${encodeURIComponent(filename)}` : '';
+}
 function readLocalList(key) {
   try {
     const value = JSON.parse(localStorage.getItem(key) || '[]');
@@ -687,7 +691,7 @@ async function openItem(type, id, item = null) {
     $('#trailerSection').classList.add('hidden');
     $('#trailerUnavailable').classList.add('hidden');
     $('#modalHero').style.backgroundImage = details.backdrop_path
-      ? `url("https://image.tmdb.org/t/p/original${details.backdrop_path}")`
+      ? `url("${tmdbImageUrl(details.backdrop_path, 'original')}")`
       : 'none';
     $('#modalTitle').textContent = details.title || details.name || 'Titre inconnu';
     const date = details.release_date || details.first_air_date || '';
@@ -720,7 +724,7 @@ async function openItem(type, id, item = null) {
         <button class="cast-card" type="button" data-person-id="${person.id}" aria-label="Ouvrir la fiche de ${esc(person.name)}">
           <div class="cast-photo">
             ${person.profile_path
-              ? `<img loading="lazy" src="https://image.tmdb.org/t/p/w300${person.profile_path}" alt="Photo de ${esc(person.name)}">`
+              ? `<img loading="lazy" src="${tmdbImageUrl(person.profile_path, 'w300')}" alt="Photo de ${esc(person.name)}">`
               : `<span aria-hidden="true">${esc(initials)}</span>`}
           </div>
           <strong>${esc(person.name)}</strong>
@@ -739,8 +743,8 @@ async function openItem(type, id, item = null) {
       year: date.slice(0, 4),
       rating: Number(details.vote_average || item?.rating || 0),
       runtime: Number(runtime || item?.runtime || 0),
-      poster: item?.poster || (details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : ''),
-      backdrop: item?.backdrop || (details.backdrop_path ? `https://image.tmdb.org/t/p/w1280${details.backdrop_path}` : ''),
+      poster: item?.poster || tmdbImageUrl(details.poster_path, 'w500'),
+      backdrop: item?.backdrop || tmdbImageUrl(details.backdrop_path, 'w1280'),
       overview: details.overview || item?.overview || ''
     };
     if (type === 'movie') await showVidzyStatus(id);

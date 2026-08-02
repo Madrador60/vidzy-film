@@ -40,5 +40,16 @@ test('normalizeItem produit un contenu stable', () => {
   assert.equal(item.id, 42);
   assert.equal(item.type, 'movie');
   assert.equal(item.year, '2024');
-  assert.equal(item.poster, 'https://image.tmdb.org/t/p/w500/poster.jpg');
+  assert.equal(item.poster, '/api/image/w500/poster.jpg');
+});
+
+test('le proxy d’images refuse les chemins non autorisés', async () => {
+  await request(app).get('/api/image/giant/poster.jpg').expect(400);
+  await request(app).get('/api/image/w500/x').expect(400);
+});
+
+test('normalizeItem accepte un film sans date de sortie', () => {
+  const item = normalizeItem({ id: 43, title: 'Film sans date' }, 'movie');
+  assert.equal(item.year, '');
+  assert.equal(item.date, undefined);
 });

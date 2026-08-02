@@ -182,15 +182,20 @@ function normalizeItem(item, type) {
     title: type === 'movie' ? item.title : item.name,
     originalTitle: type === 'movie' ? item.original_title : item.original_name,
     date: type === 'movie' ? item.release_date : item.first_air_date,
-    year: (type === 'movie' ? item.release_date : item.first_air_date || '').slice(0, 4),
-    poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '',
-    backdrop: item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : '',
+    year: String(type === 'movie' ? (item.release_date || '') : (item.first_air_date || '')).slice(0, 4),
+    poster: tmdbImageUrl('w500', item.poster_path),
+    backdrop: tmdbImageUrl('w1280', item.backdrop_path),
     rating: Number(item.vote_average || 0),
     votes: Number(item.vote_count || 0),
     overview: item.overview || '',
     genreIds: item.genre_ids || [],
     popularity: Number(item.popularity || 0)
   };
+}
+
+function tmdbImageUrl(size, imagePath) {
+  const filename = path.posix.basename(String(imagePath || ''));
+  return filename ? `/api/image/${size}/${encodeURIComponent(filename)}` : '';
 }
 
 app.get('/api/health', (_req, res) => res.json({
@@ -205,6 +210,33 @@ app.get('/api/health', (_req, res) => res.json({
   }
 }));
 app.get('/api/config', (_req, res) => res.json({ tmdbConfigured: Boolean(TMDB_TOKEN) }));
+
+app.get('/api/image/:size/:filename', async (req, res) => {
+  const allowedSizes = new Set(['w300', 'w500', 'w1280', 'h632', 'original']);
+  const { size, filename } = req.params;
+  if (!allowedSizes.has(size) || !/^[a-zA-Z0-9._-]{3,160}$/.test(filename)) {
+    return res.status(400).json({ error: 'Image TMDB invalide.' });
+  }
+  try {
+    const upstream = await fetch(`https://image.tmdb.org/t/p/${size}/${encodeURIComponent(filename)}`, {
+      headers: { accept: 'image/avif,image/webp,image/jpeg,image/*' },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!upstream.ok) return res.status(upstream.status === 404 ? 404 : 502).end();
+    const contentType = upstream.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) return res.status(502).end();
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    if (!bytes.length || bytes.length > 10 * 1024 * 1024) return res.status(502).end();
+    res.set({
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400',
+      'Cross-Origin-Resource-Policy': 'same-origin'
+    });
+    res.send(bytes);
+  } catch {
+    res.status(502).end();
+  }
+});
 
 app.get('/api/live', async (_req, res) => {
   try {
@@ -336,7 +368,7 @@ app.get('/api/search-all', async (req, res) => {
         id: person.id,
         name: person.name || 'Artiste',
         department: person.known_for_department || '',
-        profile: person.profile_path ? `https://image.tmdb.org/t/p/w300${person.profile_path}` : ''
+        profile: tmdbImageUrl('w300', person.profile_path)
       }));
     const expanded = (data.results || []).flatMap(item =>
       item.media_type === 'person' ? (item.known_for || []) : [item]);
@@ -393,7 +425,7 @@ app.get('/api/person/:id', async (req, res) => {
       deathday: person.deathday || '',
       placeOfBirth: person.place_of_birth || '',
       department: person.known_for_department || '',
-      profile: person.profile_path ? `https://image.tmdb.org/t/p/h632${person.profile_path}` : '',
+      profile: tmdbImageUrl('h632', person.profile_path),
       homepage: person.homepage || '',
       imdbId: person.external_ids?.imdb_id || '',
       credits
@@ -463,7 +495,7 @@ app.get('/api/season/:id/:season', async (req, res) => {
         runtime: episode.runtime || 0,
         airDate: episode.air_date || '',
         rating: Number(episode.vote_average || 0),
-        image: episode.still_path ? `https://image.tmdb.org/t/p/w500${episode.still_path}` : ''
+        image: tmdbImageUrl('w500', episode.still_path)
       }))
     });
   } catch (error) {
