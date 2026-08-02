@@ -53,3 +53,36 @@ test('normalizeItem accepte un film sans date de sortie', () => {
   assert.equal(item.year, '');
   assert.equal(item.date, undefined);
 });
+
+test('les en-têtes de sécurité et la limite JSON sont actifs', async () => {
+  const response = await request(app).get('/api/health').expect(200);
+  assert.equal(response.headers['x-powered-by'], undefined);
+  assert.match(response.headers['content-security-policy'], /default-src 'self'/);
+  assert.match(response.headers['permissions-policy'], /camera=\(\)/);
+  const oversized = 'x'.repeat(40 * 1024);
+  const rejected = await request(app).post('/api/unknown').send({ oversized }).expect(413);
+  assert.equal(rejected.body.ok, false);
+  assert.equal(rejected.body.error, 'La requête est trop volumineuse.');
+});
+
+test('une page inconnue renvoie une vraie page 404', async () => {
+  const response = await request(app).get('/adresse-inconnue').expect(404);
+  assert.match(response.headers['content-type'], /text\/html/);
+  assert.match(response.text, /Page introuvable/);
+});
+
+test('le serveur écoute par défaut sur toutes les interfaces', async (t) => {
+  const { startServer } = require('../server');
+  const server = startServer(0);
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+  assert.equal(server.address().address, '0.0.0.0');
+});
+
+test('le serveur reste stable sous plusieurs requêtes successives', async () => {
+  const responses = await Promise.all(Array.from({ length: 40 }, () => request(app).get('/api/health')));
+  assert.equal(responses.every(response => response.status === 200 && response.body.ok === true), true);
+});

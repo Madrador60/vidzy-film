@@ -1,5 +1,45 @@
 # Rapport d’audit Vidzy
 
+## Audit de production — 2 août 2026
+
+Déploiement audité : `https://vidzy-madra.onrender.com`
+
+Commit de départ : `55d39a2`
+
+Périmètre : démarrage Render, API, sécurité, interface, lecteurs, responsive, accessibilité, SEO, cache et gestion des erreurs.
+
+### Corrections appliquées
+
+- écoute explicite sur `0.0.0.0` et arrêt propre sur `SIGTERM`/`SIGINT` ;
+- nom Blueprint aligné sur `vidzy-madra`, `npm ci`, `npm start` et `/api/health` conservés ;
+- vraie page 404 avec code HTTP 404 au lieu d’un retour silencieux vers l’accueil ;
+- messages d’erreur externes nettoyés, timeouts 12 secondes côté navigateur et réponses 413/JSON invalides lisibles ;
+- bouton Réessayer pour catalogue, Direct, sélections, ambiances et lecteurs ;
+- état d’échec du lecteur intégré, rechargement de source et maintien de la liste blanche HTTPS ;
+- fallback visuel automatique pour les images cassées ;
+- cartes harmonisées avec titres sur deux lignes et survol discret ;
+- métadonnées Open Graph, canonical, titre, description et identité « Vidzy Madra » ;
+- contrôles accessibles nommés, profil unique rendu non interactif et focus visible ;
+- cache public court sur les API GET non sensibles, compression et cache interne conservés ;
+- tests supplémentaires : sécurité HTTP, limite JSON, page 404, écoute réseau et 40 requêtes parallèles.
+
+### Résultats avant correction
+
+- 16 parcours HTTP vérifiés : toutes les API fonctionnelles répondaient, mais une page inexistante renvoyait `200` ;
+- aucune erreur JavaScript détectée dans la console sur l’accueil, Films et la recherche ;
+- recherche « Matrix » : 13 résultats, catalogue Films : 20 cartes ;
+- API Direct : 431 chaînes, environ 164 Ko ;
+- audit accessibilité automatisé : 2 boutons cachés sans nom et 1 champ caché sans label, corrigés ;
+- `npm audit --omit=dev` : 0 vulnérabilité connue.
+
+### Limites externes restantes
+
+- un fournisseur en iframe peut déclencher `load` puis afficher sa propre erreur, sans API permettant à Vidzy de la lire ;
+- Vidzy, Hesgoaler, TMDB, YouTube et EPG.pw peuvent changer, expirer ou appliquer des restrictions géographiques ;
+- la progression reste estimée en l’absence d’API temps réel du lecteur tiers ;
+- Render Free peut mettre le service en veille et ralentir la première requête ;
+- favoris et historique restent locaux à chaque navigateur.
+
 Date : 27 juillet 2026  
 Version auditée : 2.0.0  
 Stack : Node.js, Express, JavaScript natif, HTML/CSS, TMDB, Vidzy, Hesgoaler, PWA.

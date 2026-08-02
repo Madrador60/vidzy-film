@@ -4,14 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#08090c">
-  <meta name="description" content="Découvrez des films et séries, puis lancez votre séance avec Vidzy.">
+  <meta name="description" content="Vidzy Madra réunit films, séries, fiches détaillées et chaînes en direct dans une interface moderne.">
+  <meta property="og:title" content="Vidzy Madra — Films, séries et direct">
+  <meta property="og:description" content="Découvrez des films, séries et chaînes en direct sur Vidzy Madra.">
+  <meta property="og:image" content="https://vidzy-madra.onrender.com/icon.svg">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://vidzy-madra.onrender.com/">
+  <meta name="twitter:card" content="summary">
+  <link rel="canonical" href="https://vidzy-madra.onrender.com/">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Vidzy">
-  <title>Vidzy — Films & séries</title>
+  <title>Vidzy Madra — Films, séries et direct</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="styles.css?v=26">
+  <link rel="stylesheet" href="styles.css?v=27">
 </head>
 <body>
   <header class="site-header">
@@ -28,9 +35,9 @@
       <button id="favoritesBtn" class="favorites-link" type="button">♡ Ma liste <span id="favoritesCount">0</span></button>
       <button id="libraryBtn" class="library-button" type="button">▦ Mon espace</button>
       <div class="profile-wrap">
-        <button id="profileBtn" class="profile-button profile-single" type="button" aria-label="Profil Madra">
+        <div id="profileBtn" class="profile-button profile-single" aria-label="Profil Madra">
           <span id="profileAvatar" class="profile-avatar">M</span><span id="profileName">Madra</span>
-        </button>
+        </div>
         <div id="profileMenu" class="profile-menu hidden" aria-hidden="true"></div>
       </div>
     </div>
@@ -229,7 +236,7 @@
         <span id="pageInfo2">Page 1</span>
         <button id="next2" class="page-button">Suivant →</button>
       </section>
-      <div class="hidden" aria-hidden="true"><button id="prev"></button><span id="pageInfo"></span><button id="next"></button></div>
+      <div class="hidden" aria-hidden="true"><button id="prev" aria-label="Page précédente"></button><span id="pageInfo"></span><button id="next" aria-label="Page suivante"></button></div>
     </section>
   </main>
 
@@ -242,7 +249,8 @@
       <a id="inlinePlayerExternal" href="#" target="_blank" rel="noopener noreferrer">Ouvrir sur Vidzy ↗</a>
     </header>
     <div class="inline-player-stage">
-      <div id="inlinePlayerLoading" class="inline-player-loading">Chargement du lecteur…</div>
+      <div id="inlinePlayerLoading" class="inline-player-loading" role="status">Chargement du lecteur…</div>
+      <div id="inlinePlayerError" class="inline-player-error hidden" role="alert"><strong>La source ne répond pas</strong><span>Vous pouvez relancer le lecteur ou revenir à la fiche.</span><button id="inlinePlayerRetry" type="button">Réessayer</button></div>
       <iframe id="inlinePlayerFrame" title="Lecteur vidéo Vidzy" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
   </section>
@@ -270,7 +278,7 @@
             <h3 id="episodesTitle">Épisodes</h3>
             <label><span>Saison</span><select id="season" aria-label="Choisir une saison"></select></label>
           </div>
-          <input id="episode" type="hidden" value="1">
+          <input id="episode" type="hidden" value="1" aria-label="Numéro de l’épisode sélectionné">
           <div id="episodesList" class="episodes-list"><div class="episodes-loading">Chargement des épisodes…</div></div>
         </section>
         <div class="detail-actions">
@@ -301,6 +309,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=40"></script>
+  <script src="app.js?v=41"></script>
 </body>
 </html>

@@ -24,6 +24,21 @@ const API_RATE_WINDOW_MS = 60 * 1000;
 const API_RATE_LIMIT = 180;
 const rateBuckets = new Map();
 
+function routeError(error, fallback = 'Impossible de charger le contenu.') {
+  const status = Number(error?.status) || 502;
+  if (status === 404) return { status: 404, message: 'Contenu introuvable.' };
+  if (status === 401 || status === 403) return { status: 502, message: 'La source a refusé la requête.' };
+  if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+    return { status: 504, message: 'La source ne répond pas. Réessayez dans un instant.' };
+  }
+  return { status: status >= 400 && status < 500 ? status : 502, message: fallback };
+}
+
+function sendRouteError(res, error, fallback) {
+  const safe = routeError(error, fallback);
+  return res.status(safe.status).json({ error: safe.message });
+}
+
 function pruneMap(map, maxSize) {
   if (map.size <= maxSize) return;
   const overflow = map.size - maxSize;
@@ -81,6 +96,14 @@ app.use('/api', (_req, res, next) => {
     }
     return sendJson({ ok: true, data: payload ?? null });
   };
+  next();
+});
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'GET' || req.path === '/health' || req.path === '/config') {
+    res.setHeader('Cache-Control', 'no-store');
+  } else {
+    res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
+  }
   next();
 });
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -273,7 +296,7 @@ app.get('/api/live', async (_req, res) => {
     res.json({ channels, cached: false });
   } catch (error) {
     if (liveCache.channels.length) return res.json({ channels: liveCache.channels, cached: true, stale: true });
-    res.status(502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible de charger les chaînes en direct.');
   }
 });
 
@@ -308,7 +331,7 @@ app.get('/api/catalog/:type', async (req, res) => {
       results
     });
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible de charger le catalogue.');
   }
 });
 
@@ -325,7 +348,7 @@ app.get('/api/trending', async (_req, res) => {
     }));
     res.json({ results: checked.filter(Boolean).slice(0, 20) });
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible de charger les tendances.');
   }
 });
 
@@ -350,7 +373,7 @@ app.get('/api/search', async (req, res) => {
       results
     });
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible d’effectuer la recherche.');
   }
 });
 
@@ -390,7 +413,7 @@ app.get('/api/search-all', async (req, res) => {
     }));
     res.json({ people, results: checked.filter(Boolean).slice(0, 18) });
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible d’effectuer la recherche.');
   }
 });
 
@@ -431,7 +454,7 @@ app.get('/api/person/:id', async (req, res) => {
       credits
     });
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible de charger cette personne.');
   }
 });
 
@@ -442,7 +465,7 @@ app.get('/api/genres/:type', async (req, res) => {
     const data = await tmdbRequest(`/genre/${type}/list`, { language: 'fr-FR' });
     res.json(data);
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible de charger les genres.');
   }
 });
 
@@ -470,7 +493,7 @@ app.get('/api/details/:type/:id', async (req, res) => {
     };
     res.json(data);
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible de charger ce contenu.');
   }
 });
 
@@ -499,7 +522,7 @@ app.get('/api/season/:id/:season', async (req, res) => {
       }))
     });
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible de charger cette saison.');
   }
 });
 
@@ -514,7 +537,7 @@ app.get('/api/recommendations/:type/:id', async (req, res) => {
     const results = await keepVidzyCompatible(normalized, type === 'movie');
     res.json({ results });
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible de charger les recommandations.');
   }
 });
 
@@ -539,7 +562,7 @@ app.get('/api/videos/:type/:id', async (req, res) => {
       language: trailer.iso_639_1 || ''
     } : { available: false });
   } catch (error) {
-    res.status(error.status || 502).json({ error: error.message });
+    sendRouteError(res, error, 'Impossible de charger la bande-annonce.');
   }
 });
 
@@ -552,18 +575,23 @@ app.get('/api/vidzy/:tmdbId', async (req, res) => {
 
 app.get('/player.html', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'player.html')));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Route API introuvable.' }));
-app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/offline.html', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'offline.html')));
+app.get('*', (_req, res) => res.status(404).sendFile(path.join(__dirname, 'public', '404.html')));
 app.use((error, _req, res, _next) => {
-  console.error('[server]', error.message);
-  const message = process.env.NODE_ENV === 'production'
-    ? 'Erreur interne du serveur.'
-    : error.message;
-  res.status(error.status || 500).json({ ok: false, error: message });
+  const status = Number(error.status) || 500;
+  if (status >= 500) console.error('[server]', error.message);
+  const message = status === 413
+    ? 'La requête est trop volumineuse.'
+    : status === 400 && error.type === 'entity.parse.failed'
+      ? 'Le contenu de la requête est invalide.'
+      : process.env.NODE_ENV === 'production' ? 'Erreur interne du serveur.' : error.message;
+  res.status(status).json({ ok: false, error: message });
 });
 
-function startServer(port = PORT) {
-  const server = app.listen(port, () => {
-    console.log(`Catalogue Vidzy lancé sur http://localhost:${port}`);
+function startServer(port = PORT, host = '0.0.0.0') {
+  const server = app.listen(port, host, () => {
+    console.log(`Catalogue Vidzy lancé sur ${host}:${port}`);
   });
 
   server.on('error', error => {
@@ -579,6 +607,15 @@ function startServer(port = PORT) {
   return server;
 }
 
-if (require.main === module) startServer();
+if (require.main === module) {
+  const server = startServer();
+  const shutdown = signal => {
+    console.log(`${signal} reçu, arrêt propre du serveur…`);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 10000).unref();
+  };
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
+}
 
 module.exports = { app, startServer, normalizeItem };
