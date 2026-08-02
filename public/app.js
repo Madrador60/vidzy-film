@@ -30,6 +30,7 @@ let currentEpisodes = [];
 let inlineProgressTimer = 0;
 let inlineProgressContext = null;
 let inlineLoadTimer = 0;
+let inlineReturnTarget = 'detail';
 let installPrompt = null;
 const loadedHomeRails = new Set();
 let globalGenresLoaded = false;
@@ -451,8 +452,10 @@ async function enterLive(categoryHint = '', activeButton = $('#liveTab')) {
   }
 }
 
-async function loadEpg() {
-  const channel = $('#epgChannel').value;
+async function loadEpg(channelName = '') {
+  const channel = channelName || $('#epgSelectedTitle').dataset.channel || 'TF1';
+  $('#epgSelectedTitle').textContent = channel;
+  $('#epgSelectedTitle').dataset.channel = channel;
   $('#epgPrograms').innerHTML = '<div class="epg-loading">Chargement du programme…</div>';
   try {
     const data = await json(`/api/epg?channel=${encodeURIComponent(channel)}`);
@@ -497,11 +500,51 @@ async function loadEpgOverview() {
     liveEpg = data.channels || {};
     liveEpgLoaded = true;
     renderLiveChannels();
+    renderEpgChannelGuide();
   } catch {
     liveEpg = {};
     liveEpgLoaded = true;
     renderLiveChannels();
+    renderEpgChannelGuide();
   }
+}
+
+function renderEpgChannelGuide() {
+  const grid = $('#epgChannelGrid');
+  if (!grid) return;
+  const query = $('#epgSearch').value.trim().toLocaleLowerCase('fr');
+  const availability = $('#epgAvailability').value;
+  const channels = liveChannels.filter(channel => {
+    const hasGuide = Boolean(liveEpg[channel.name]?.current || liveEpg[channel.name]?.next);
+    return (!query || `${channel.name} ${channel.country} ${channel.category}`.toLocaleLowerCase('fr').includes(query))
+      && (!availability || (availability === 'available' ? hasGuide : !hasGuide));
+  });
+  const availableCount = liveChannels.filter(channel => liveEpg[channel.name]?.current || liveEpg[channel.name]?.next).length;
+  $('#epgCoverage').innerHTML = `<strong>${availableCount}</strong> chaîne${availableCount > 1 ? 's' : ''} avec programme · <span>${liveChannels.length} chaînes parcourues</span>`;
+  if (!channels.length) {
+    grid.innerHTML = '<div class="epg-guide-empty">Aucune chaîne ne correspond à cette recherche.</div>';
+    return;
+  }
+  grid.innerHTML = channels.slice(0, 500).map(channel => {
+    const guide = liveEpg[channel.name];
+    const current = guide?.current;
+    const next = guide?.next;
+    const progress = Math.max(0, Math.min(100, Number(current?.progress) || 0));
+    return `<button class="epg-channel-row ${current ? 'has-program' : ''}" type="button" data-epg-channel="${esc(channel.name)}">
+      <span class="epg-channel-identity">${channel.image ? `<img loading="lazy" src="${esc(channel.image)}" alt="">` : `<b>${esc(channel.name.slice(0, 1))}</b>`}<span><strong>${esc(channel.name)}</strong><small>${esc(channel.country)} · ${esc(channel.category)}</small></span></span>
+      <span class="epg-channel-current">${current ? `<time>${formatEpgTime(current.start)}–${formatEpgTime(current.end)}</time><strong>${esc(current.title)}</strong><span class="epg-progress"><span style="width:${progress}%"></span></span>` : '<em>Programme non renseigné</em>'}</span>
+      <span class="epg-channel-next">${next ? `<small>Ensuite · ${formatEpgTime(next.start)}</small><strong>${esc(next.title)}</strong>` : ''}</span>
+      <span class="epg-row-arrow">›</span>
+    </button>`;
+  }).join('');
+  grid.querySelectorAll('[data-epg-channel]').forEach(button => {
+    button.addEventListener('click', () => {
+      grid.querySelectorAll('.active').forEach(row => row.classList.remove('active'));
+      button.classList.add('active');
+      loadEpg(button.dataset.epgChannel);
+      $('#epgPrograms').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
 }
 
 async function loadLiveChannels() {
@@ -515,6 +558,7 @@ async function loadLiveChannels() {
     $('#liveCategory').innerHTML = '<option value="">Toutes les catégories</option>' + categories.map(value => `<option>${esc(value)}</option>`).join('');
     $('#liveCountry').innerHTML = '<option value="">Tous les pays</option>' + countries.map(value => `<option>${esc(value)}</option>`).join('');
     renderLiveChannels();
+    renderEpgChannelGuide();
     loadEpgOverview();
   } catch (error) {
     $('#liveGrid').innerHTML = retryMessage('Impossible de charger le direct.', 'live');
@@ -549,13 +593,37 @@ function renderLiveChannels() {
     const programMarkup = current
       ? `<span class="live-program"><span class="live-program-label">Maintenant · ${formatEpgTime(current.start)}–${formatEpgTime(current.end)}</span><strong>${esc(current.title)}</strong><span class="live-now-progress" aria-label="Progression ${Math.max(0, Math.min(100, Number(current.progress) || 0))} %"><span style="width:${Math.max(0, Math.min(100, Number(current.progress) || 0))}%"></span></span>${next ? `<span class="live-next"><b>${formatEpgTime(next.start)}</b> · ${esc(next.title)}</span>` : ''}</span>`
       : `<span class="live-program live-program-empty">${liveEpgLoaded ? 'Programme non renseigné' : 'Programme en cours de chargement…'}</span>`;
-    return `<a class="live-card" href="${target.pathname}${target.search}">
+    return `<a class="live-card" href="${target.pathname}${target.search}" data-live-id="${esc(channel.id)}">
       <span class="live-badge"><span class="live-dot"></span> EN DIRECT</span>
       ${channel.image ? `<img loading="lazy" src="${esc(channel.image)}" alt="Logo ${esc(channel.name)}">` : `<span class="live-card-logo-fallback">${esc(channel.name.slice(0, 1))}</span>`}
       <span class="live-card-info"><strong>${esc(channel.name)}</strong><span>${esc(channel.country)} · ${esc(channel.category)}</span></span>
       ${programMarkup}
     </a>`;
   }).join('');
+  $('#liveGrid').querySelectorAll('[data-live-id]').forEach(card => {
+    card.addEventListener('click', event => {
+      event.preventDefault();
+      const channel = visibleChannels.find(item => item.id === card.dataset.liveId);
+      if (channel) openLiveChannel(channel);
+    });
+  });
+}
+
+function openLiveChannel(channel) {
+  if (!channel || !/^[a-zA-Z0-9_-]{1,80}$/.test(channel.id || '')) return;
+  const source = `https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channel.id)}`;
+  inlineReturnTarget = 'home';
+  inlineProgressContext = null;
+  $('#inlinePlayerTitle').textContent = channel.name || 'Chaîne en direct';
+  $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'}`;
+  $('#inlinePlayerExternal').href = source;
+  $('#inlinePlayer').classList.remove('hidden', 'loaded');
+  $('#inlinePlayerError').classList.add('hidden');
+  $('#inlinePlayerLoading').classList.remove('hidden');
+  requestInlineFullscreen();
+  $('#inlinePlayerFrame').src = source;
+  armInlineTimeout();
+  history.pushState({ vidzyPlayer: true, liveChannel: channel.id }, '', location.href);
 }
 
 function railMarkup(items, ranked = false) {
@@ -826,21 +894,20 @@ function openPlayerFromCard(type, id, title) {
     ? state.selectedItem
     : (remembered || { type, id: Number(id), title });
   rememberWatch(knownItem);
-  const page = new URL('/player.html', window.location.origin);
-  page.searchParams.set('type', type === 'movie' ? 'movie' : 'series');
-  page.searchParams.set('id', id);
-  page.searchParams.set('title', title || 'Lecture Vidzy');
-  page.searchParams.set('profile', activeProfile.id);
-  const preferredLanguage = localStorage.getItem(languageKey) || '';
-  if (preferredLanguage) page.searchParams.set('lang', preferredLanguage);
-
-  // Pour les séries, un clic sur l’affiche lance directement S01E01.
+  state.selected = { type, id };
+  state.selectedItem = knownItem;
+  $('#modalTitle').textContent = title || knownItem.title || 'Lecture Vidzy';
+  $('#playLanguage').value = localStorage.getItem(languageKey) || '';
   if (type !== 'movie') {
-    page.searchParams.set('season', String(Math.max(1, Number(knownItem.lastSeason) || 1)));
-    page.searchParams.set('episode', String(Math.max(1, Number(knownItem.lastEpisode) || 1)));
+    const season = Math.max(1, Number(knownItem.lastSeason) || 1);
+    if (![...$('#season').options].some(option => Number(option.value) === season)) {
+      $('#season').insertAdjacentHTML('beforeend', `<option value="${season}">Saison ${season}</option>`);
+    }
+    $('#season').value = String(season);
+    $('#episode').value = String(Math.max(1, Number(knownItem.lastEpisode) || 1));
   }
-
-  window.location.href = page.toString();
+  inlineReturnTarget = 'home';
+  openPlayerPage();
 }
 
 function rememberWatch(item) {
@@ -1110,6 +1177,7 @@ function openPlayerPage() {
   $('#inlinePlayerMeta').textContent = `${isMovie ? 'Film' : `Saison ${season} · Épisode ${episode}`}${language ? ` · ${language}` : ''}`;
   $('#inlinePlayerExternal').href = source;
   $('#inlinePlayer').classList.remove('hidden', 'loaded');
+  if (!inlineReturnTarget) inlineReturnTarget = 'detail';
   $('#inlinePlayerError').classList.add('hidden');
   $('#inlinePlayerLoading').classList.remove('hidden');
   $('#inlinePlayerFrame').src = source;
@@ -1123,14 +1191,24 @@ function openPlayerPage() {
   window.clearInterval(inlineProgressTimer);
   inlineProgressTimer = window.setInterval(saveInlineProgress, 5000);
   history.pushState({ vidzyPlayer: true }, '', location.href);
-  const videoFrame = $('#inlinePlayerFrame');
-  if (videoFrame.requestFullscreen) {
-    videoFrame.requestFullscreen({ navigationUI: 'hide' }).catch(() => {
-      $('#inlinePlayer').requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
-    });
-  } else {
-    $('#inlinePlayer').requestFullscreen?.().catch(() => {});
-  }
+  requestInlineFullscreen();
+}
+
+function requestInlineFullscreen() {
+  const player = $('#inlinePlayer');
+  if (document.fullscreenElement) return Promise.resolve(true);
+  try {
+    const result = player.requestFullscreen
+      ? player.requestFullscreen({ navigationUI: 'hide' })
+      : player.webkitRequestFullscreen?.();
+    if (!result && !document.fullscreenElement) return Promise.resolve(Boolean(player.webkitDisplayingFullscreen));
+    return Promise.resolve(result).then(() => true).catch(() => false);
+  } catch { return Promise.resolve(false); }
+}
+
+function toggleInlineFullscreen() {
+  if (document.fullscreenElement) return document.exitFullscreen().catch(() => {});
+  return requestInlineFullscreen();
 }
 
 function saveInlineProgress(force = false) {
@@ -1168,9 +1246,11 @@ function restoreDetailAfterPlayer(updateHistory = true) {
   $('#inlinePlayer').classList.remove('loaded');
   $('#inlinePlayerFrame').src = '';
   window.clearTimeout(inlineLoadTimer);
-  $('#modal').classList.remove('hidden');
-  $('#modal').setAttribute('aria-hidden', 'false');
-  document.body.classList.add('no-scroll');
+  const returnToDetail = inlineReturnTarget === 'detail';
+  inlineReturnTarget = 'detail';
+  $('#modal').classList.toggle('hidden', !returnToDetail);
+  $('#modal').setAttribute('aria-hidden', returnToDetail ? 'false' : 'true');
+  document.body.classList.toggle('no-scroll', returnToDetail);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (updateHistory && history.state?.vidzyPlayer) history.back();
 }
@@ -1315,8 +1395,14 @@ $('#liveTab').onclick = () => enterLive('', $('#liveTab'));
 $('#liveSearch').addEventListener('input', () => { liveVisibleLimit = 60; renderLiveChannels(); });
 ['#liveCategory', '#liveCountry'].forEach(selector => $(selector).addEventListener('change', () => { liveVisibleLimit = 60; renderLiveChannels(); }));
 $('#liveMore').onclick = () => { liveVisibleLimit += 60; renderLiveChannels(); };
-$('#epgChannel').addEventListener('change', loadEpg);
-$('#epgRefresh').onclick = loadEpg;
+$('#epgSearch').addEventListener('input', renderEpgChannelGuide);
+$('#epgAvailability').addEventListener('change', renderEpgChannelGuide);
+$('#epgRefresh').onclick = () => {
+  liveEpgLoaded = false;
+  $('#epgCoverage').textContent = 'Actualisation de la grille TV…';
+  loadEpgOverview();
+  loadEpg();
+};
 $('#epgToggle').onclick = () => {
   $('#epgPanel').classList.toggle('collapsed');
   $('#epgToggle').textContent = $('#epgPanel').classList.contains('collapsed') ? '▦ Afficher le programme TV' : '▦ Masquer le programme TV';
@@ -1393,6 +1479,7 @@ window.addEventListener('popstate', () => {
   else if (!$('#modal').classList.contains('hidden')) closeModal();
 });
 $('#inlinePlayerBack').onclick = closeInlinePlayer;
+$('#inlinePlayerFullscreen').onclick = toggleInlineFullscreen;
 $('#inlinePlayerFrame').addEventListener('load', () => {
   window.clearTimeout(inlineLoadTimer);
   $('#inlinePlayer').classList.add('loaded');
@@ -1435,6 +1522,7 @@ document.addEventListener('error', event => {
   }
 }, true);
 document.addEventListener('fullscreenchange', () => {
+  $('#inlinePlayerFullscreen').textContent = document.fullscreenElement ? '× Quitter le plein écran' : '⛶ Plein écran';
   if (!document.fullscreenElement && !$('#inlinePlayer').classList.contains('hidden')) {
     restoreDetailAfterPlayer(true);
   }

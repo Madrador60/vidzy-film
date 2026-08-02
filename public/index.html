@@ -18,7 +18,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="styles.css?v=31">
+  <link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
   <header class="site-header">
@@ -198,10 +198,21 @@
         <button id="epgToggle" class="epg-guide-link" type="button">▦ Programme TV</button>
       </div>
       <section id="epgPanel" class="epg-panel" aria-labelledby="epgTitle">
-        <div class="epg-panel-head"><div><p class="eyebrow">Guide français</p><h2 id="epgTitle">Programme TV</h2></div><a href="https://epg.pw/areas/fr.html?lang=fr" target="_blank" rel="noopener noreferrer">Source EPG.pw ↗</a></div>
-        <div class="epg-controls"><label for="epgChannel">Chaîne</label><select id="epgChannel"><option>TF1</option><option>France 2</option><option>France 3</option><option>Canal+</option><option>France 5</option><option>M6</option><option>Arte</option><option>C8</option><option>W9</option><option>TMC</option><option>TFX</option><option>NRJ 12</option><option>BFM TV</option><option>CNEWS</option><option>LCI</option><option>franceinfo:</option></select><button id="epgRefresh" type="button">Actualiser</button></div>
-        <div id="epgPrograms" class="epg-programs" aria-live="polite"><div class="epg-loading">Chargement du programme…</div></div>
-        <div id="epgDetail" class="epg-detail hidden" role="status"></div>
+        <div class="epg-panel-head"><div><p class="eyebrow">Guide complet</p><h2 id="epgTitle">Programme TV</h2><p>Le programme de toutes les chaînes, sans quitter le Direct.</p></div><a href="https://epg.pw/areas/fr.html?lang=fr" target="_blank" rel="noopener noreferrer">Source EPG.pw ↗</a></div>
+        <div class="epg-controls">
+          <label class="epg-search"><span aria-hidden="true">⌕</span><input id="epgSearch" type="search" aria-label="Rechercher une chaîne dans le programme TV" placeholder="Rechercher dans le guide…" autocomplete="off"></label>
+          <select id="epgAvailability" aria-label="Filtrer le guide TV"><option value="">Toutes les chaînes</option><option value="available">Avec programme</option><option value="unavailable">Sans programme</option></select>
+          <button id="epgRefresh" type="button">↻ Actualiser</button>
+        </div>
+        <div id="epgCoverage" class="epg-coverage" aria-live="polite">Chargement de la grille TV…</div>
+        <div class="epg-guide-layout">
+          <div id="epgChannelGrid" class="epg-channel-grid"><div class="epg-loading">Chargement des chaînes…</div></div>
+          <section class="epg-schedule" aria-labelledby="epgSelectedTitle">
+            <div class="epg-schedule-head"><p class="eyebrow">Grille détaillée</p><h3 id="epgSelectedTitle">Sélectionnez une chaîne</h3></div>
+            <div id="epgPrograms" class="epg-programs" aria-live="polite"><div class="epg-loading">Choisissez une chaîne pour afficher sa grille.</div></div>
+            <div id="epgDetail" class="epg-detail hidden" role="status"></div>
+          </section>
+        </div>
       </section>
       <div id="liveGrid" class="live-grid"><div class="live-loading">Chargement des chaînes…</div></div>
       <button id="liveMore" class="live-more hidden" type="button">Afficher plus de chaînes</button>
@@ -252,7 +263,7 @@
     <header class="inline-player-header">
       <button id="inlinePlayerBack" type="button">← Retour à la fiche</button>
       <div><strong id="inlinePlayerTitle">Lecture Vidzy</strong><span id="inlinePlayerMeta"></span></div>
-      <a id="inlinePlayerExternal" href="#" target="_blank" rel="noopener noreferrer">Ouvrir sur Vidzy ↗</a>
+      <div class="inline-player-actions"><button id="inlinePlayerFullscreen" type="button">⛶ Plein écran</button><a id="inlinePlayerExternal" href="#" target="_blank" rel="noopener noreferrer">Ouvrir sur Vidzy ↗</a></div>
     </header>
     <div class="inline-player-stage">
       <div id="inlinePlayerLoading" class="inline-player-loading" role="status">Chargement du lecteur…</div>
@@ -315,6 +326,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=44"></script>
+  <script src="app.js?v=45"></script>
 </body>
 </html>
