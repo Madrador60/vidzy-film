@@ -18,7 +18,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body>
   <header class="site-header">
@@ -244,7 +244,7 @@
         <button id="clearBtn" class="clear-button" type="button" aria-label="Réinitialiser les filtres">Réinitialiser</button>
       </form>
 
-      <div id="setup" class="message error-message hidden"><h2>Configuration requise</h2><p>Ajoutez votre jeton TMDB dans le fichier <code>.env</code>, puis relancez le site.</p></div>
+      <div id="setup" class="message error-message hidden"><h2>Catalogue momentanément indisponible</h2><p>Les films et séries ne peuvent pas être chargés pour le moment. Le Direct et le Programme TV restent accessibles.</p></div>
       <section id="grid" class="grid" aria-live="polite"></section>
       <div id="loading" class="loading" role="status">Chargement du catalogue…</div>
 
@@ -259,20 +259,20 @@
 
   <footer><a class="brand" href="/"><span class="brand-mark">V</span><span>VIDZY</span></a><p>Le cinéma, sans détour.</p></footer>
 
-  <section id="inlinePlayer" class="inline-player hidden" aria-label="Lecteur Vidzy">
+  <section id="inlinePlayer" class="inline-player hidden" aria-label="Lecteur Vidzy" aria-hidden="true" hidden>
     <header class="inline-player-header">
       <button id="inlinePlayerBack" type="button">← Retour à la fiche</button>
       <div><strong id="inlinePlayerTitle">Lecture Vidzy</strong><span id="inlinePlayerMeta"></span></div>
       <div class="inline-player-actions"><button id="inlinePlayerFullscreen" type="button">⛶ Plein écran</button><a id="inlinePlayerExternal" href="#" target="_blank" rel="noopener noreferrer">Ouvrir sur Vidzy ↗</a></div>
     </header>
     <div class="inline-player-stage">
-      <div id="inlinePlayerLoading" class="inline-player-loading" role="status">Chargement du lecteur…</div>
-      <div id="inlinePlayerError" class="inline-player-error hidden" role="alert"><strong>La source ne répond pas</strong><span>Vous pouvez relancer le lecteur ou revenir à la fiche.</span><button id="inlinePlayerRetry" type="button">Réessayer</button></div>
+      <div id="inlinePlayerLoading" class="inline-player-loading" role="status">Sélectionnez une source pour commencer la lecture.</div>
+      <div id="inlinePlayerError" class="inline-player-error hidden" role="alert"><strong>La source ne répond pas</strong><span id="inlinePlayerErrorText">Vous pouvez relancer le lecteur ou revenir à la fiche.</span><div class="inline-error-actions"><button id="inlinePlayerRetry" type="button">Réessayer</button><button id="inlinePlayerNextSource" class="hidden" type="button">Source suivante</button></div></div>
       <iframe id="inlinePlayerFrame" title="Lecteur vidéo Vidzy" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
   </section>
 
-  <div id="modal" class="detail-modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true">
+  <div id="modal" class="detail-modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true" hidden inert>
     <div id="modalCard" class="detail-card">
       <button id="close" class="modal-close" type="button" aria-label="Fermer">×</button>
       <div id="modalHero" class="detail-visual"><div class="detail-gradient"></div></div>
@@ -326,6 +326,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=45"></script>
+  <script src="app.js?v=48"></script>
 </body>
 </html>

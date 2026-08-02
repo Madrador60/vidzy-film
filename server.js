@@ -11,7 +11,7 @@ require('dotenv').config();
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 const STARTED_AT = new Date();
-const TMDB_TOKEN = String(process.env.TMDB_BEARER_TOKEN || process.env.TMDB_READ_TOKEN || '').trim();
+const TMDB_TOKEN = String(process.env.TMDB_BEARER_TOKEN || '').trim();
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const LIVE_FEED = 'https://hesgoaler.com/madra.json';
 let liveCache = { expires: 0, channels: [] };
@@ -115,7 +115,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 
 async function tmdbRequest(endpoint, query = {}) {
   if (!TMDB_TOKEN) {
-    const error = new Error('TMDB_READ_TOKEN manquant dans le fichier .env.');
+    const error = new Error('TMDB_BEARER_TOKEN manquant dans les variables d’environnement.');
     error.status = 503;
     throw error;
   }
@@ -263,10 +263,10 @@ app.get('/api/image/:size/:filename', async (req, res) => {
   }
 });
 
-app.get('/api/live', async (_req, res) => {
+async function loadDirectChannels() {
   try {
     if (Date.now() < liveCache.expires && liveCache.channels.length) {
-      return res.json({ channels: liveCache.channels, cached: true });
+      return { channels: liveCache.channels, cached: true };
     }
     const response = await fetch(LIVE_FEED, {
       headers: { accept: 'application/json', 'user-agent': 'VidzyLive/1.0' },
@@ -294,13 +294,47 @@ app.get('/api/live', async (_req, res) => {
       } catch { return []; }
     });
     const channels = [...new Map(parsedChannels.map(channel => [channel.id, channel])).values()];
+    if (!channels.length) throw new Error('La source Direct ne contient aucune chaîne valide.');
     liveCache = { expires: Date.now() + 5 * 60 * 1000, channels };
-    res.json({ channels, cached: false });
+    return { channels, cached: false };
   } catch (error) {
-    if (liveCache.channels.length) return res.json({ channels: liveCache.channels, cached: true, stale: true });
+    console.warn('[direct]', error.message);
+    if (liveCache.channels.length) return { channels: liveCache.channels, cached: true, stale: true };
+    throw error;
+  }
+}
+
+async function directRoute(_req, res) {
+  try {
+    res.json(await loadDirectChannels());
+  } catch (error) {
     sendRouteError(res, error, 'Impossible de charger les chaînes en direct.');
   }
-});
+}
+
+app.get('/api/live', directRoute);
+app.get('/api/direct/channels', directRoute);
+
+function serializeProgram(program, now = Date.now()) {
+  if (!program) return null;
+  const start = program.start instanceof Date ? program.start : new Date(program.start);
+  const end = program.end instanceof Date ? program.end : new Date(program.end);
+  const current = start.getTime() <= now && end.getTime() > now;
+  return {
+    title: program.title,
+    description: program.description || '',
+    category: program.category || '',
+    start: start.toISOString(),
+    end: end.toISOString(),
+    current,
+    progress: current ? Math.max(0, Math.min(100, Math.round(((now - start.getTime()) / (end.getTime() - start.getTime())) * 100))) : 0
+  };
+}
+
+function serializeGuide(guide) {
+  const now = Date.now();
+  return { ...guide, programs: guide.programs.map(program => serializeProgram(program, now)) };
+}
 
 app.get('/api/epg', async (req, res) => {
   const requested = String(req.query.channel || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
@@ -308,16 +342,49 @@ app.get('/api/epg', async (req, res) => {
   try {
     const guide = await epgService.guide(requested, 36);
     if (!guide) return res.status(404).json({ error: 'Programme indisponible pour cette chaîne.' });
-    const now = Date.now();
-    res.json({ ...guide, programs: guide.programs.map(program => ({
-      title: program.title, description: program.description, category: program.category,
-      start: program.start.toISOString(), end: program.end.toISOString(),
-      current: program.start.getTime() <= now && program.end.getTime() > now,
-      progress: program.start.getTime() <= now && program.end.getTime() > now
-        ? Math.round(((now - program.start.getTime()) / (program.end.getTime() - program.start.getTime())) * 100) : 0
-    })) });
+    res.json(serializeGuide(guide));
   } catch (error) {
     sendRouteError(res, error, 'Impossible de charger le programme TV.');
+  }
+});
+
+app.get('/api/epg/status', (_req, res) => res.json(epgService.status()));
+
+app.get('/api/epg/channels', async (_req, res) => {
+  try {
+    res.json(await epgService.channelList());
+  } catch (error) {
+    sendRouteError(res, error, 'Impossible de charger les chaînes du guide TV.');
+  }
+});
+
+app.get('/api/epg/now', async (_req, res) => {
+  try {
+    const direct = await loadDirectChannels();
+    res.json(await epgService.overview(direct.channels.map(channel => channel.name)));
+  } catch (error) {
+    sendRouteError(res, error, 'Impossible de charger les programmes en cours.');
+  }
+});
+
+app.get('/api/epg/channel/:id', async (req, res) => {
+  const id = String(req.params.id || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  if (!id || id.length > 160) return res.status(400).json({ error: 'Identifiant EPG invalide.' });
+  try {
+    const guide = await epgService.guideById(id, 36);
+    if (!guide) return res.status(404).json({ error: 'Programme indisponible pour cette chaîne.' });
+    res.json(serializeGuide(guide));
+  } catch (error) {
+    sendRouteError(res, error, 'Impossible de charger le programme TV.');
+  }
+});
+
+app.post('/api/epg/refresh', async (_req, res) => {
+  try {
+    await epgService.refresh(true);
+    res.json(epgService.status());
+  } catch (error) {
+    sendRouteError(res, error, 'Impossible d’actualiser le guide TV.');
   }
 });
 
@@ -631,6 +698,8 @@ app.use((error, _req, res, _next) => {
 function startServer(port = PORT, host = '0.0.0.0') {
   const server = app.listen(port, host, () => {
     console.log(`Catalogue Vidzy lancé sur ${host}:${port}`);
+    if (!TMDB_TOKEN) console.warn('[config] TMDB_BEARER_TOKEN absent : le catalogue est désactivé, le Direct et l’EPG restent disponibles.');
+    else console.log('[config] TMDB_BEARER_TOKEN configuré.');
   });
 
   server.on('error', error => {

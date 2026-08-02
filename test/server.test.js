@@ -91,3 +91,26 @@ test('la route EPG refuse un nom vide avant tout appel externe', async () => {
   const response = await request(app).get('/api/epg?channel=').expect(400);
   assert.deepEqual(response.body, { ok: false, error: 'Nom de chaîne invalide.' });
 });
+
+test('les nouvelles routes Direct et EPG existent et gardent une enveloppe cohérente', async () => {
+  const status = await request(app).get('/api/epg/status').expect(200);
+  assert.equal(status.body.ok, true);
+  assert.equal(status.body.data.source, 'EPG.PW France');
+  const invalidChannel = await request(app).get('/api/epg/channel/%20').expect(400);
+  assert.equal(invalidChannel.body.error, 'Identifiant EPG invalide.');
+
+  const previousFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify([
+    { channel_name: 'TF1 FR', url: 'https://hesgoaler.com/madra.php?ch=TF1FR', country: 'France', category: 'General' },
+    { channel_name: 'Doublon', url: 'https://hesgoaler.com/madra.php?ch=TF1FR' },
+    { channel_name: 'Invalide', url: 'https://example.com/watch?ch=nope' }
+  ]), { status: 200, headers: { 'content-type': 'application/json' } });
+  try {
+    const direct = await request(app).get('/api/direct/channels').expect(200);
+    assert.equal(direct.body.ok, true);
+    assert.equal(direct.body.data.channels.length, 1);
+    assert.equal(direct.body.data.channels[0].id, 'TF1FR');
+  } finally {
+    global.fetch = previousFetch;
+  }
+});
