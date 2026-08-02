@@ -26,7 +26,7 @@ TMDB_BEARER_TOKEN=your_tmdb_bearer_token_here
 ALLOWED_PLAYER_HOSTS=vidzy.org,www.vidzy.org,hesgoaler.com,www.youtube-nocookie.com
 ```
 
-`TMDB_API_KEY` est documenté dans `.env.example` pour les environnements qui le demandent, mais le serveur utilise le jeton Bearer. Ne publie jamais `.env`.
+Le projet utilise uniquement `TMDB_BEARER_TOKEN` (jeton de lecture API TMDB v4). Ne publie jamais `.env` et n’expose jamais ce jeton au navigateur.
 
 ## Commandes
 
@@ -69,6 +69,15 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 Le guide est consultable en français sur [epg.pw — France](https://epg.pw/areas/fr.html?lang=fr). Sa couverture dépend des chaînes référencées par ce service externe.
 
 Le serveur télécharge `https://epg.pw/xmltv/epg_FR.xml.gz`, le décompresse et le parse en streaming. La grille est conservée en mémoire pendant huit heures, rafraîchie automatiquement et réutilisée en mode dégradé si la source devient momentanément indisponible. Les alias de chaînes sont centralisés dans `lib/epg-service.js` pour faciliter l’ajout de nouveaux mappings ou de nouvelles sources XMLTV.
+
+Routes Direct et Programme TV :
+
+- `GET /api/direct/channels` (`/api/live` reste compatible) ;
+- `GET /api/epg/status` ;
+- `GET /api/epg/channels` ;
+- `GET /api/epg/now` ;
+- `GET /api/epg/channel/:id` ;
+- `POST /api/epg/refresh`.
 
 ## Structure
 

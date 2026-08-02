@@ -31,6 +31,8 @@ let inlineProgressTimer = 0;
 let inlineProgressContext = null;
 let inlineLoadTimer = 0;
 let inlineReturnTarget = 'detail';
+let inlineSourceContext = null;
+let inlineReturnUrl = '';
 let installPrompt = null;
 const loadedHomeRails = new Set();
 let globalGenresLoaded = false;
@@ -144,7 +146,10 @@ function armInlineTimeout() {
   window.clearTimeout(inlineLoadTimer);
   inlineLoadTimer = window.setTimeout(() => {
     if ($('#inlinePlayer').classList.contains('loaded')) return;
+    $('#inlinePlayerFrame').src = '';
     $('#inlinePlayerLoading').classList.add('hidden');
+    $('#inlinePlayerErrorText').textContent = `La source « ${inlineSourceContext?.name || 'sélectionnée'} » ne répond pas. Vous pouvez réessayer, choisir la suivante ou revenir en arrière.`;
+    $('#inlinePlayerNextSource').classList.toggle('hidden', !inlineSourceContext?.next);
     $('#inlinePlayerError').classList.remove('hidden');
   }, 15000);
 }
@@ -159,22 +164,34 @@ function renderProfiles() {
 async function init() {
   renderProfiles();
   saveFavorites();
+  if (location.hash === '#direct') {
+    try { await enterLive(); } catch (error) {
+      $('#liveGrid').innerHTML = retryMessage(error.message, 'live');
+      $('#liveCount').textContent = 'Indisponible';
+    }
+    return;
+  }
   try {
     const config = await json('/api/config');
     if (!config.tmdbConfigured) {
+      showCatalogueView(false);
+      history.replaceState(null, '', '#home');
       $('#setup').classList.remove('hidden');
       loading.classList.add('hidden');
       return;
     }
     await refreshLocalCollections();
     await loadHome();
-    if (location.hash === '#direct') enterLive();
+    if (location.hash === '#movies' || location.hash === '#series') {
+      document.querySelector(`.tab[data-type="${location.hash === '#movies' ? 'movie' : 'serie'}"]`)?.click();
+    }
     const sharedParams = new URLSearchParams(location.search);
     const sharedType = sharedParams.get('type');
     const sharedId = sharedParams.get('id');
     if ((sharedType === 'movie' || sharedType === 'serie') && /^\d+$/.test(sharedId || '')) {
       await openItem(sharedType, sharedId, null, false);
       history.replaceState({ vidzyDetail: true, sharedEntry: true }, '', location.href);
+      if (location.hash === '#player') openPlayerPage();
     }
   } catch (error) {
     loading.textContent = `Impossible de démarrer : ${error.message}`;
@@ -243,14 +260,32 @@ function setupFeatured(items) {
 }
 
 function showCatalogueView(showHome = true) {
-  $('#liveView').classList.add('hidden');
-  $('#hero').classList.toggle('hidden', !showHome);
-  $('#discovery').classList.toggle('hidden', !showHome);
-  $('.catalogue').classList.toggle('hidden', showHome);
+  setInteractiveVisibility($('#liveView'), false);
+  setInteractiveVisibility($('#hero'), showHome);
+  setInteractiveVisibility($('#discovery'), showHome);
+  setInteractiveVisibility($('.catalogue'), !showHome);
   $('#favoritesBtn').classList.remove('hidden');
   $('#liveTab').classList.remove('active');
-  if (location.hash === '#direct') history.replaceState(null, '', location.pathname);
+  const targetHash = showHome ? '#home' : (state.type === 'movie' ? '#movies' : '#series');
+  if (!['#details', '#player'].includes(location.hash)) history.replaceState(null, '', targetHash);
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setInteractiveVisibility(element, visible) {
+  if (!element) return;
+  element.classList.toggle('hidden', !visible);
+  element.hidden = !visible;
+  element.setAttribute('aria-hidden', String(!visible));
+  element.inert = !visible;
+}
+
+function setPlayerMode(active) {
+  [document.querySelector('.site-header'), document.querySelector('main'), document.querySelector('footer')].forEach(element => {
+    if (!element) return;
+    element.inert = active;
+    element.toggleAttribute('inert', active);
+    element.setAttribute('aria-hidden', String(active));
+  });
 }
 
 function openGlobalSearch() {
@@ -431,11 +466,11 @@ function renderRecentSearches() {
 async function enterLive(categoryHint = '', activeButton = $('#liveTab')) {
   document.querySelectorAll('.tab').forEach(button => button.classList.remove('active'));
   activeButton.classList.add('active');
-  $('#hero').classList.add('hidden');
-  $('#discovery').classList.add('hidden');
-  $('.catalogue').classList.add('hidden');
+  setInteractiveVisibility($('#hero'), false);
+  setInteractiveVisibility($('#discovery'), false);
+  setInteractiveVisibility($('.catalogue'), false);
   $('#favoritesBtn').classList.add('hidden');
-  $('#liveView').classList.remove('hidden');
+  setInteractiveVisibility($('#liveView'), true);
   history.replaceState(null, '', '#direct');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   updateLiveClock();
@@ -496,7 +531,7 @@ function updateLiveClock() {
 
 async function loadEpgOverview() {
   try {
-    const data = await json('/api/epg-overview');
+    const data = await json('/api/epg/now');
     liveEpg = data.channels || {};
     liveEpgLoaded = true;
     renderLiveChannels();
@@ -550,9 +585,15 @@ function renderEpgChannelGuide() {
 async function loadLiveChannels() {
   $('#liveGrid').innerHTML = '<div class="live-loading">Chargement des chaînes…</div>';
   try {
-    const data = await json('/api/live');
-    liveChannels = data.channels || [];
+    const data = await json('/api/direct/channels');
+    liveChannels = Array.isArray(data.channels) ? data.channels : [];
     liveLoaded = true;
+    if (!liveChannels.length) {
+      $('#liveGrid').innerHTML = '<div class="live-empty">Aucune chaîne n’est disponible actuellement.</div>';
+      $('#liveCount').textContent = '0 chaîne disponible';
+      renderEpgChannelGuide();
+      return;
+    }
     const categories = [...new Set(liveChannels.map(channel => channel.category))].sort((a, b) => a.localeCompare(b, 'fr'));
     const countries = [...new Set(liveChannels.map(channel => channel.country))].sort((a, b) => a.localeCompare(b, 'fr'));
     $('#liveCategory').innerHTML = '<option value="">Toutes les catégories</option>' + categories.map(value => `<option>${esc(value)}</option>`).join('');
@@ -561,8 +602,10 @@ async function loadLiveChannels() {
     renderEpgChannelGuide();
     loadEpgOverview();
   } catch (error) {
-    $('#liveGrid').innerHTML = retryMessage('Impossible de charger le direct.', 'live');
+    $('#liveGrid').innerHTML = retryMessage(error.message || 'Impossible de charger le direct.', 'live');
     $('#liveCount').textContent = 'Indisponible';
+  } finally {
+    if ($('#liveCount').textContent === 'Chargement…') $('#liveCount').textContent = liveChannels.length ? `${liveChannels.length} chaînes disponibles` : 'Indisponible';
   }
 }
 
@@ -613,17 +656,26 @@ function openLiveChannel(channel) {
   if (!channel || !/^[a-zA-Z0-9_-]{1,80}$/.test(channel.id || '')) return;
   const source = `https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channel.id)}`;
   inlineReturnTarget = 'home';
+  inlineReturnUrl = location.href;
+  const index = liveChannels.findIndex(item => item.id === channel.id);
+  const next = index >= 0 && liveChannels.length > 1 ? liveChannels[(index + 1) % liveChannels.length] : null;
+  inlineSourceContext = { kind: 'live', name: channel.name || channel.id, url: source, next };
   inlineProgressContext = null;
   $('#inlinePlayerTitle').textContent = channel.name || 'Chaîne en direct';
   $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'}`;
   $('#inlinePlayerExternal').href = source;
-  $('#inlinePlayer').classList.remove('hidden', 'loaded');
+  setInteractiveVisibility($('#inlinePlayer'), true);
+  setPlayerMode(true);
+  $('#inlinePlayer').classList.remove('loaded');
   $('#inlinePlayerError').classList.add('hidden');
+  $('#inlinePlayerErrorText').textContent = '';
   $('#inlinePlayerLoading').classList.remove('hidden');
   requestInlineFullscreen();
   $('#inlinePlayerFrame').src = source;
   armInlineTimeout();
-  history.pushState({ vidzyPlayer: true, liveChannel: channel.id }, '', location.href);
+  const playerUrl = new URL(location.href);
+  playerUrl.hash = 'player';
+  history.pushState({ vidzyPlayer: true, liveChannel: channel.id }, '', playerUrl);
 }
 
 function railMarkup(items, ranked = false) {
@@ -928,13 +980,13 @@ async function openItem(type, id, item = null, syncUrl = true) {
     state.selected = { type, id };
     state.selectedItem = item;
     const details = await json(`/api/details/${type}/${id}`);
-    $('#modal').classList.remove('hidden');
-    $('#modal').setAttribute('aria-hidden', 'false');
+    setInteractiveVisibility($('#modal'), true);
     document.body.classList.add('no-scroll');
     if (syncUrl) {
       const detailUrl = new URL(location.origin + location.pathname);
       detailUrl.searchParams.set('type', type);
       detailUrl.searchParams.set('id', String(id));
+      detailUrl.hash = 'details';
       history.pushState({ vidzyDetail: true }, '', detailUrl);
     }
     $('#modalHero').classList.remove('hidden');
@@ -1172,25 +1224,30 @@ function openPlayerPage() {
   const episode = isMovie ? 0 : Math.max(1, Number($('#episode').value) || 1);
   const durationMinutes = isMovie ? Number(state.selectedItem?.runtime || 0) : selectedEpisodeRuntime;
   const source = vidzyUrl();
+  inlineReturnUrl = location.href;
+  inlineSourceContext = { kind: 'media', name: $('#modalTitle').textContent || 'Vidzy', url: source, next: null };
   $('#inlinePlayerTitle').textContent = $('#modalTitle').textContent || 'Lecture Vidzy';
   const language = $('#playLanguage').value.toUpperCase();
   $('#inlinePlayerMeta').textContent = `${isMovie ? 'Film' : `Saison ${season} · Épisode ${episode}`}${language ? ` · ${language}` : ''}`;
   $('#inlinePlayerExternal').href = source;
-  $('#inlinePlayer').classList.remove('hidden', 'loaded');
+  setInteractiveVisibility($('#inlinePlayer'), true);
+  setPlayerMode(true);
+  $('#inlinePlayer').classList.remove('loaded');
   if (!inlineReturnTarget) inlineReturnTarget = 'detail';
   $('#inlinePlayerError').classList.add('hidden');
   $('#inlinePlayerLoading').classList.remove('hidden');
   $('#inlinePlayerFrame').src = source;
   armInlineTimeout();
-  $('#modal').classList.add('hidden');
-  $('#modal').setAttribute('aria-hidden', 'true');
+  setInteractiveVisibility($('#modal'), false);
   inlineProgressContext = {
     key: isMovie ? `movie:${state.selected.id}` : `series:${state.selected.id}:${season}:${episode}`,
     durationSeconds: Math.max(60, durationMinutes ? durationMinutes * 60 : 7200)
   };
   window.clearInterval(inlineProgressTimer);
   inlineProgressTimer = window.setInterval(saveInlineProgress, 5000);
-  history.pushState({ vidzyPlayer: true }, '', location.href);
+  const playerUrl = new URL(location.href);
+  playerUrl.hash = 'player';
+  history.pushState({ vidzyPlayer: true }, '', playerUrl);
   requestInlineFullscreen();
 }
 
@@ -1242,17 +1299,25 @@ function restoreDetailAfterPlayer(updateHistory = true) {
   window.clearInterval(inlineProgressTimer);
   inlineProgressTimer = 0;
   inlineProgressContext = null;
-  $('#inlinePlayer').classList.add('hidden');
+  setInteractiveVisibility($('#inlinePlayer'), false);
+  setPlayerMode(false);
   $('#inlinePlayer').classList.remove('loaded');
   $('#inlinePlayerFrame').src = '';
+  inlineSourceContext = null;
   window.clearTimeout(inlineLoadTimer);
   const returnToDetail = inlineReturnTarget === 'detail';
   inlineReturnTarget = 'detail';
-  $('#modal').classList.toggle('hidden', !returnToDetail);
-  $('#modal').setAttribute('aria-hidden', returnToDetail ? 'false' : 'true');
+  setInteractiveVisibility($('#modal'), returnToDetail);
   document.body.classList.toggle('no-scroll', returnToDetail);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  if (updateHistory && history.state?.vidzyPlayer) history.back();
+  if (updateHistory && history.state?.vidzyPlayer) {
+    const expectedUrl = inlineReturnUrl || (returnToDetail ? `${location.pathname}${location.search}#details` : '#direct');
+    history.back();
+    window.setTimeout(() => {
+      if ($('#inlinePlayer').hidden && location.hash === '#player') history.replaceState(null, '', expectedUrl);
+    }, 180);
+  }
+  inlineReturnUrl = '';
 }
 
 function closeInlinePlayer() {
@@ -1319,8 +1384,7 @@ $('#prev').onclick = $('#prev2').onclick = () => changePage(-1);
 $('#next').onclick = $('#next2').onclick = () => changePage(1);
 function closeModal() {
   $('#trailerPlayer').src = '';
-  $('#modal').classList.add('hidden');
-  $('#modal').setAttribute('aria-hidden', 'true');
+  setInteractiveVisibility($('#modal'), false);
   $('#modalHero').classList.remove('hidden');
   document.body.classList.remove('no-scroll');
   if (history.state?.vidzyDetail && !history.state.sharedEntry) history.back();
@@ -1400,8 +1464,9 @@ $('#epgAvailability').addEventListener('change', renderEpgChannelGuide);
 $('#epgRefresh').onclick = () => {
   liveEpgLoaded = false;
   $('#epgCoverage').textContent = 'Actualisation de la grille TV…';
-  loadEpgOverview();
-  loadEpg();
+  json('/api/epg/refresh', { method: 'POST' })
+    .then(() => Promise.all([loadEpgOverview(), loadEpg()]))
+    .catch(error => { $('#epgCoverage').innerHTML = retryMessage(error.message, 'epg-refresh'); });
 };
 $('#epgToggle').onclick = () => {
   $('#epgPanel').classList.toggle('collapsed');
@@ -1478,9 +1543,18 @@ window.addEventListener('popstate', () => {
   if ((type === 'movie' || type === 'serie') && /^\d+$/.test(id || '')) openItem(type, id, null, false);
   else if (!$('#modal').classList.contains('hidden')) closeModal();
 });
+function applyHashRoute() {
+  if (location.hash === '#direct' && $('#liveView').classList.contains('hidden')) enterLive();
+  else if (location.hash === '#home' && $('#hero').classList.contains('hidden')) $('#homeTab').click();
+  else if (location.hash === '#movies' && (state.type !== 'movie' || $('.catalogue').classList.contains('hidden'))) document.querySelector('.tab[data-type="movie"]')?.click();
+  else if (location.hash === '#series' && (state.type !== 'serie' || $('.catalogue').classList.contains('hidden'))) document.querySelector('.tab[data-type="serie"]')?.click();
+}
+window.addEventListener('hashchange', applyHashRoute);
+window.addEventListener('popstate', applyHashRoute);
 $('#inlinePlayerBack').onclick = closeInlinePlayer;
 $('#inlinePlayerFullscreen').onclick = toggleInlineFullscreen;
 $('#inlinePlayerFrame').addEventListener('load', () => {
+  if (!$('#inlinePlayerFrame').getAttribute('src')) return;
   window.clearTimeout(inlineLoadTimer);
   $('#inlinePlayer').classList.add('loaded');
   $('#inlinePlayerLoading').classList.add('hidden');
@@ -1488,7 +1562,8 @@ $('#inlinePlayerFrame').addEventListener('load', () => {
 });
 $('#inlinePlayerRetry').onclick = () => {
   const frame = $('#inlinePlayerFrame');
-  const source = frame.src;
+  const source = inlineSourceContext?.url;
+  if (!source) return;
   $('#inlinePlayer').classList.remove('loaded');
   $('#inlinePlayerError').classList.add('hidden');
   $('#inlinePlayerLoading').classList.remove('hidden');
@@ -1497,6 +1572,10 @@ $('#inlinePlayerRetry').onclick = () => {
   frame.src = retrySource.toString();
   armInlineTimeout();
 };
+$('#inlinePlayerNextSource').onclick = () => {
+  const next = inlineSourceContext?.next;
+  if (next) openLiveChannel(next);
+};
 document.addEventListener('click', event => {
   const button = event.target.closest('[data-retry]');
   if (!button) return;
@@ -1504,6 +1583,7 @@ document.addEventListener('click', event => {
   if (action === 'catalogue') load();
   else if (action === 'live') { liveLoaded = false; loadLiveChannels(); }
   else if (action === 'epg') loadEpg();
+  else if (action === 'epg-refresh') $('#epgRefresh').click();
   else if (action.startsWith('mood:')) loadMood(action.slice(5));
   else if (action.startsWith('rail:')) {
     const selector = action.slice(5);
