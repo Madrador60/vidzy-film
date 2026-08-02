@@ -25,6 +25,7 @@ let selectedEpisodeRuntime = 0;
 let currentEpisodes = [];
 let inlineProgressTimer = 0;
 let inlineProgressContext = null;
+let inlineLoadTimer = 0;
 let installPrompt = null;
 const loadedHomeRails = new Set();
 let globalGenresLoaded = false;
@@ -112,10 +113,35 @@ function safeExternalUrl(value = '') {
 }
 
 async function json(url, options = {}) {
-  const response = await fetch(url, { ...options, headers: { accept: 'application/json', ...(options.headers || {}) } });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.ok === false) throw new Error(payload.error || `Erreur HTTP ${response.status}`);
-  return payload.ok === true && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const abort = () => controller.abort();
+  options.signal?.addEventListener('abort', abort, { once: true });
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal, headers: { accept: 'application/json', ...(options.headers || {}) } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) throw new Error(payload.error || 'Impossible de charger le contenu.');
+    return payload.ok === true && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
+  } catch (error) {
+    if (error.name === 'AbortError' && !options.signal?.aborted) throw new Error('La source ne répond pas. Réessayez.');
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    options.signal?.removeEventListener('abort', abort);
+  }
+}
+
+function retryMessage(message, action) {
+  return `<div class="message error-message"><p>${esc(message || 'Impossible de charger le contenu.')}</p><button class="retry-button" type="button" data-retry="${esc(action)}">Réessayer</button></div>`;
+}
+
+function armInlineTimeout() {
+  window.clearTimeout(inlineLoadTimer);
+  inlineLoadTimer = window.setTimeout(() => {
+    if ($('#inlinePlayer').classList.contains('loaded')) return;
+    $('#inlinePlayerLoading').classList.add('hidden');
+    $('#inlinePlayerError').classList.remove('hidden');
+  }, 15000);
 }
 
 function renderProfiles() {
@@ -427,7 +453,7 @@ async function loadLiveChannels() {
     $('#liveCountry').innerHTML = '<option value="">Tous les pays</option>' + countries.map(value => `<option>${esc(value)}</option>`).join('');
     renderLiveChannels();
   } catch (error) {
-    $('#liveGrid').innerHTML = `<div class="live-empty">Impossible de charger le direct : ${esc(error.message)}</div>`;
+    $('#liveGrid').innerHTML = retryMessage('Impossible de charger le direct.', 'live');
     $('#liveCount').textContent = 'Indisponible';
   }
 }
@@ -536,7 +562,7 @@ async function loadMood(mood) {
     $('#moodResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (error) {
     $('#moodRail').classList.remove('rail-loading');
-    $('#moodRail').innerHTML = `<p class="library-empty">${esc(error.message)}</p>`;
+    $('#moodRail').innerHTML = retryMessage(error.message, `mood:${mood}`);
   }
 }
 
@@ -592,7 +618,8 @@ async function loadHomeRail({ selector, url, ranked = false, featured = false })
     if (featured) setupFeatured(items);
   } catch {
     $(selector).classList.remove('rail-loading');
-    $(selector).innerHTML = '<div class="message"><p>Cette sélection est momentanément indisponible.</p></div>';
+    $(selector).innerHTML = retryMessage('Cette sélection est momentanément indisponible.', `rail:${selector}`);
+    $(selector).querySelector('[data-retry]')?.setAttribute('data-url', url);
   }
 }
 
@@ -670,7 +697,7 @@ async function load() {
       : (state.type === 'movie' ? 'Catalogue Films' : 'Catalogue Séries');
     updatePager();
   } catch (error) {
-    grid.innerHTML = `<div class="setup"><h2>Erreur</h2><p>${esc(error.message)}</p></div>`;
+    grid.innerHTML = retryMessage(error.message, 'catalogue');
   } finally {
     loading.classList.add('hidden');
   }
@@ -1012,7 +1039,10 @@ function openPlayerPage() {
   $('#inlinePlayerMeta').textContent = `${isMovie ? 'Film' : `Saison ${season} · Épisode ${episode}`}${language ? ` · ${language}` : ''}`;
   $('#inlinePlayerExternal').href = source;
   $('#inlinePlayer').classList.remove('hidden', 'loaded');
+  $('#inlinePlayerError').classList.add('hidden');
+  $('#inlinePlayerLoading').classList.remove('hidden');
   $('#inlinePlayerFrame').src = source;
+  armInlineTimeout();
   $('#modal').classList.add('hidden');
   $('#modal').setAttribute('aria-hidden', 'true');
   inlineProgressContext = {
@@ -1066,6 +1096,7 @@ function restoreDetailAfterPlayer(updateHistory = true) {
   $('#inlinePlayer').classList.add('hidden');
   $('#inlinePlayer').classList.remove('loaded');
   $('#inlinePlayerFrame').src = '';
+  window.clearTimeout(inlineLoadTimer);
   $('#modal').classList.remove('hidden');
   $('#modal').setAttribute('aria-hidden', 'false');
   document.body.classList.add('no-scroll');
@@ -1285,7 +1316,46 @@ window.addEventListener('popstate', () => {
   else if (!$('#modal').classList.contains('hidden')) closeModal();
 });
 $('#inlinePlayerBack').onclick = closeInlinePlayer;
-$('#inlinePlayerFrame').addEventListener('load', () => $('#inlinePlayer').classList.add('loaded'));
+$('#inlinePlayerFrame').addEventListener('load', () => {
+  window.clearTimeout(inlineLoadTimer);
+  $('#inlinePlayer').classList.add('loaded');
+  $('#inlinePlayerLoading').classList.add('hidden');
+  $('#inlinePlayerError').classList.add('hidden');
+});
+$('#inlinePlayerRetry').onclick = () => {
+  const frame = $('#inlinePlayerFrame');
+  const source = frame.src;
+  $('#inlinePlayer').classList.remove('loaded');
+  $('#inlinePlayerError').classList.add('hidden');
+  $('#inlinePlayerLoading').classList.remove('hidden');
+  const retrySource = new URL(source);
+  retrySource.searchParams.set('_retry', String(Date.now()));
+  frame.src = retrySource.toString();
+  armInlineTimeout();
+};
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-retry]');
+  if (!button) return;
+  const action = button.dataset.retry || '';
+  if (action === 'catalogue') load();
+  else if (action === 'live') { liveLoaded = false; loadLive(); }
+  else if (action.startsWith('mood:')) loadMood(action.slice(5));
+  else if (action.startsWith('rail:')) {
+    const selector = action.slice(5);
+    loadedHomeRails.delete(selector);
+    loadHomeRail({ selector, url: button.dataset.url || '' });
+  }
+});
+document.addEventListener('error', event => {
+  const image = event.target;
+  if (!(image instanceof HTMLImageElement) || image.dataset.fallbackApplied) return;
+  image.dataset.fallbackApplied = 'true';
+  image.hidden = true;
+  image.parentElement?.classList.add('image-unavailable');
+  if (image.parentElement && !image.parentElement.querySelector('.image-fallback-label')) {
+    image.parentElement.insertAdjacentHTML('beforeend', '<span class="image-fallback-label" aria-hidden="true">V</span>');
+  }
+}, true);
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement && !$('#inlinePlayer').classList.contains('hidden')) {
     restoreDetailAfterPlayer(true);

@@ -20,6 +20,7 @@
   const errorBox = document.querySelector('#watchError');
   const loading = document.querySelector('#loading');
   const directLink = document.querySelector('#directLink');
+  const retryButton = document.querySelector('#retryPlayer');
 
   document.querySelector('#watchTitle').textContent = title;
   document.querySelector('#watchMeta').textContent = type === 'movie'
@@ -81,21 +82,34 @@
   }
 
   let loaded = false;
-  const timeout = window.setTimeout(() => {
-    if (!loaded) {
+  let timeout = 0;
+  const armTimeout = () => {
+    window.clearTimeout(timeout);
+    timeout = window.setTimeout(() => {
+      if (loaded) return;
       loading.classList.add('hidden');
       errorBox.classList.remove('hidden');
-    }
-  }, 15000);
+    }, 15000);
+  };
 
   player.addEventListener('load', () => {
     loaded = true;
     window.clearTimeout(timeout);
     loading.classList.add('hidden');
     errorBox.classList.add('hidden');
-  }, { once: true });
+  });
 
-  player.src = source;
+  const loadSource = () => {
+    loaded = false;
+    loading.classList.remove('hidden');
+    errorBox.classList.add('hidden');
+    armTimeout();
+    const retrySource = new URL(source);
+    retrySource.searchParams.set('_retry', String(Date.now()));
+    player.src = retrySource.toString();
+  };
+  retryButton.addEventListener('click', loadSource);
+  loadSource();
 
   const saveProgress = () => {
     if (!loaded || document.hidden) return;

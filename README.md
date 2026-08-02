@@ -61,6 +61,7 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 
 ## Versions récentes
 
+- **Audit production août 2026** : démarrage `0.0.0.0`, vraie page 404, erreurs publiques nettoyées, timeouts et boutons Réessayer, fallback d’images, SEO enrichi et arrêt Render propre.
 - **Vidzy 4.0** : Mon espace, statistiques, ambiances, coups de cœur et bouton « Surprenez-moi ».
 - **Vidzy 3.0** : fiches partageables, recherche par genre, reprise des séries et interface recentrée.
 - **Direct** : lecture immédiate, plein écran, isolation des pop-ups et accès au guide TV français.
@@ -88,6 +89,12 @@ AUDIT-RAPPORT.md     audit et corrections
 5. Déploie puis ouvre `/api/health`.
 
 Render fournit automatiquement `PORT`. Ne le fixe pas dans l’interface Render.
+
+Variables Render obligatoires :
+
+- `NODE_ENV=production` ;
+- `TMDB_BEARER_TOKEN` : jeton de lecture TMDB, configuré comme secret ;
+- `ALLOWED_PLAYER_HOSTS=vidzy.org,www.vidzy.org,hesgoaler.com,www.youtube-nocookie.com`.
 
 ## Limites connues
 

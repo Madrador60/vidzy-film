@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <title>Lecteur Vidzy</title>
-  <link rel="stylesheet" href="player.css?v=13">
+  <link rel="stylesheet" href="player.css?v=14">
 </head>
 <body>
   <header class="player-header">
@@ -25,7 +25,8 @@
     <div id="loading" class="notice">Chargement du lecteur Vidzy…</div>
     <div id="watchError" class="notice error hidden">
       <strong>Le lecteur intégré ne répond pas.</strong>
-      <span>Utilise « Ouvrir sur Vidzy » en haut à droite.</span>
+      <span>Réessayez ou utilisez « Vidzy ↗ » en haut à droite.</span>
+      <button id="retryPlayer" type="button">Réessayer</button>
     </div>
     <iframe
       id="watchPlayer"
@@ -35,6 +36,6 @@
       allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
       allowfullscreen></iframe>
   </main>
-  <script src="player.js?v=15"></script>
+  <script src="player.js?v=16"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: vidzy
+    name: vidzy-madra
     runtime: node
     plan: free
     buildCommand: npm ci
