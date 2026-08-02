@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#08090c">
   <meta name="description" content="Vidzy Madra réunit films, séries, fiches détaillées et chaînes en direct dans une interface moderne.">
-  <meta property="og:title" content="Vidzy Madra — Films, séries et direct">
-  <meta property="og:description" content="Découvrez des films, séries et chaînes en direct sur Vidzy Madra.">
+  <meta property="og:title" content="Vidzy — par Madra | Films, séries et direct">
+  <meta property="og:description" content="Découvrez des films, séries et chaînes en direct sur Vidzy — par Madra.">
   <meta property="og:image" content="https://vidzy-madra.onrender.com/icon.svg">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://vidzy-madra.onrender.com/">
   <meta name="twitter:card" content="summary">
   <link rel="canonical" href="https://vidzy-madra.onrender.com/">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Vidzy">
-  <title>Vidzy Madra — Films, séries et direct</title>
+  <meta name="apple-mobile-web-app-title" content="Vidzy Madra">
+  <title>Vidzy — par Madra | Films, séries et direct</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://image.tmdb.org">
-  <link rel="stylesheet" href="styles.css?v=33">
+  <link rel="stylesheet" href="styles.css?v=34">
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="/" aria-label="Accueil Vidzy"><span class="brand-mark">V</span><span>VIDZY</span></a>
+    <a class="brand" href="/" aria-label="Vidzy — par Madra"><span class="brand-mark" aria-hidden="true">V</span><span>Vidzy</span><small>par Madra</small></a>
     <nav aria-label="Navigation principale">
       <button id="homeTab" class="tab active" type="button">Accueil</button>
       <button class="tab" data-type="movie">Films</button>
@@ -43,7 +43,7 @@
     </div>
   </header>
 
-  <div id="libraryPanel" class="library-panel hidden" role="dialog" aria-modal="true" aria-labelledby="libraryTitle" aria-hidden="true">
+  <div id="libraryPanel" class="library-panel hidden" role="dialog" aria-modal="true" aria-labelledby="libraryTitle" aria-hidden="true" hidden inert>
     <div class="library-shell">
       <div class="library-head"><div><p class="eyebrow">Votre Vidzy</p><h2 id="libraryTitle">Mon espace</h2></div><button id="libraryClose" class="modal-close" type="button" aria-label="Fermer mon espace">×</button></div>
       <div class="library-stats"><article><strong id="libraryFavorites">0</strong><span>dans Ma liste</span></article><article><strong id="libraryHistory">0</strong><span>commencés</span></article><article><strong id="libraryLiked">0</strong><span>coups de cœur</span></article></div>
@@ -52,7 +52,7 @@
     </div>
   </div>
 
-  <div id="globalSearch" class="global-search hidden" role="dialog" aria-modal="true" aria-labelledby="globalSearchTitle">
+  <div id="globalSearch" class="global-search hidden" role="dialog" aria-modal="true" aria-labelledby="globalSearchTitle" aria-hidden="true" hidden inert>
     <div class="global-search-panel">
       <div class="global-search-head">
         <div><p class="eyebrow">Recherche globale</p><h2 id="globalSearchTitle">Que souhaitez-vous regarder ?</h2></div>
@@ -86,7 +86,7 @@
     </div>
   </div>
 
-  <div id="personPage" class="person-page hidden" role="dialog" aria-modal="true" aria-labelledby="personName" aria-hidden="true">
+  <div id="personPage" class="person-page hidden" role="dialog" aria-modal="true" aria-labelledby="personName" aria-hidden="true" hidden inert>
     <button id="personClose" class="modal-close" type="button" aria-label="Fermer la fiche acteur">×</button>
     <div class="person-shell">
       <aside class="person-sidebar">
@@ -244,7 +244,7 @@
         <button id="clearBtn" class="clear-button" type="button" aria-label="Réinitialiser les filtres">Réinitialiser</button>
       </form>
 
-      <div id="setup" class="message error-message hidden"><h2>Catalogue momentanément indisponible</h2><p>Les films et séries ne peuvent pas être chargés pour le moment. Le Direct et le Programme TV restent accessibles.</p></div>
+      <div id="setup" class="message error-message hidden"><h2>Catalogue temporairement indisponible</h2><p>Le catalogue est temporairement indisponible. Réessayez dans quelques instants.</p><button class="retry-button" type="button" data-retry="startup">Réessayer</button></div>
       <section id="grid" class="grid" aria-live="polite"></section>
       <div id="loading" class="loading" role="status">Chargement du catalogue…</div>
 
@@ -257,18 +257,18 @@
     </section>
   </main>
 
-  <footer><a class="brand" href="/"><span class="brand-mark">V</span><span>VIDZY</span></a><p>Le cinéma, sans détour.</p></footer>
+  <footer><a class="brand" href="/" aria-label="Vidzy — par Madra"><span class="brand-mark" aria-hidden="true">V</span><span>Vidzy</span><small>par Madra</small></a><p>Le cinéma, sans détour.</p></footer>
 
-  <section id="inlinePlayer" class="inline-player hidden" aria-label="Lecteur Vidzy" aria-hidden="true" hidden>
+  <section id="inlinePlayer" class="inline-player hidden" aria-label="Lecteur Vidzy — par Madra" aria-hidden="true" data-state="idle" hidden inert>
     <header class="inline-player-header">
       <button id="inlinePlayerBack" type="button">← Retour à la fiche</button>
-      <div><strong id="inlinePlayerTitle">Lecture Vidzy</strong><span id="inlinePlayerMeta"></span></div>
+      <div><strong id="inlinePlayerTitle">Lecture Vidzy — par Madra</strong><span id="inlinePlayerMeta"></span></div>
       <div class="inline-player-actions"><button id="inlinePlayerFullscreen" type="button">⛶ Plein écran</button><a id="inlinePlayerExternal" href="#" target="_blank" rel="noopener noreferrer">Ouvrir sur Vidzy ↗</a></div>
     </header>
     <div class="inline-player-stage">
       <div id="inlinePlayerLoading" class="inline-player-loading" role="status">Sélectionnez une source pour commencer la lecture.</div>
-      <div id="inlinePlayerError" class="inline-player-error hidden" role="alert"><strong>La source ne répond pas</strong><span id="inlinePlayerErrorText">Vous pouvez relancer le lecteur ou revenir à la fiche.</span><div class="inline-error-actions"><button id="inlinePlayerRetry" type="button">Réessayer</button><button id="inlinePlayerNextSource" class="hidden" type="button">Source suivante</button></div></div>
-      <iframe id="inlinePlayerFrame" title="Lecteur vidéo Vidzy" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      <div id="inlinePlayerError" class="inline-player-error hidden" role="alert"><strong id="inlinePlayerErrorTitle">Lecture indisponible</strong><span id="inlinePlayerErrorText">Vous pouvez relancer le lecteur ou revenir à la fiche.</span><div class="inline-error-actions"><button id="inlinePlayerRetry" type="button">Réessayer</button><button id="inlinePlayerNextSource" class="hidden" type="button">Source suivante</button></div></div>
+      <div id="inlinePlayerFrameHost" class="inline-player-frame-host"></div>
     </div>
   </section>
 
@@ -326,6 +326,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=49"></script>
+  <script src="app.js?v=50"></script>
 </body>
 </html>

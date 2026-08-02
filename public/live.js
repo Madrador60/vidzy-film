@@ -11,7 +11,7 @@
   const channelPosition = document.querySelector('#channelPosition');
   let channels = [];
   document.querySelector('#channelName').textContent = name;
-  document.title = `${name} — Vidzy Direct`;
+  document.title = `${name} — Vidzy par Madra`;
   document.querySelector('#backBtn').addEventListener('click', () => {
     if (history.length > 1) history.back();
     else location.href = '/#direct';
@@ -28,7 +28,7 @@
     channelId = channel.id;
     name = channel.name || channel.id;
     document.querySelector('#channelName').textContent = name;
-    document.title = `${name} — Vidzy Direct`;
+    document.title = `${name} — Vidzy par Madra`;
     player.src = `https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channelId)}`;
     const target = new URL(location.href);
     target.searchParams.set('ch', channelId);

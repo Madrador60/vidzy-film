@@ -1,8 +1,8 @@
 'use strict';
 
-const STATIC_CACHE = 'vidzy-static-v12';
+const STATIC_CACHE = 'vidzy-madra-static-v13';
 const IMAGE_CACHE = 'vidzy-images-v1';
-const SHELL = ['/', '/offline.html', '/styles.css', '/app.js', '/manifest.webmanifest', '/icon.svg'];
+const SHELL = ['/offline.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(STATIC_CACHE).then(cache => cache.addAll(SHELL)));
@@ -57,6 +57,18 @@ self.addEventListener('fetch', event => {
   }
 
   if (url.origin === location.origin) {
-    event.respondWith(caches.match(request).then(cached => cached || fetch(request)));
+    const isAppAsset = /\.(?:js|css)$/i.test(url.pathname);
+    event.respondWith(caches.open(STATIC_CACHE).then(async cache => {
+      if (isAppAsset) {
+        try {
+          const response = await fetch(request, { cache: 'no-store' });
+          if (response.ok) await cache.put(request, response.clone());
+          return response;
+        } catch {
+          return (await cache.match(request)) || Response.error();
+        }
+      }
+      return (await cache.match(request)) || fetch(request);
+    }));
   }
 });

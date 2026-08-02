@@ -15,6 +15,8 @@ let liveChannels = [];
 let liveEpg = {};
 let liveEpgLoaded = false;
 let liveLoaded = false;
+let liveLoadController = null;
+let liveLoadPromise = null;
 let liveVisibleLimit = 60;
 let epgLoaded = false;
 let liveClockTimer = 0;
@@ -33,6 +35,7 @@ let inlineLoadTimer = 0;
 let inlineReturnTarget = 'detail';
 let inlineSourceContext = null;
 let inlineReturnUrl = '';
+let inlinePlayerState = 'idle';
 let installPrompt = null;
 const loadedHomeRails = new Set();
 let globalGenresLoaded = false;
@@ -142,15 +145,67 @@ function retryMessage(message, action) {
   return `<div class="message error-message"><p>${esc(message || 'Impossible de charger le contenu.')}</p><button class="retry-button" type="button" data-retry="${esc(action)}">Réessayer</button></div>`;
 }
 
+const allowedEmbedHosts = new Set(['vidzy.org', 'www.vidzy.org', 'hesgoaler.com']);
+
+function safeEmbedUrl(value = '') {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === 'https:' && !url.username && !url.password && allowedEmbedHosts.has(url.hostname) ? url.href : '';
+  } catch { return ''; }
+}
+
+function setInlinePlayerState(nextState, message = '') {
+  inlinePlayerState = ['idle', 'loading', 'playing', 'error', 'unavailable'].includes(nextState) ? nextState : 'error';
+  $('#inlinePlayer').dataset.state = inlinePlayerState;
+  $('#inlinePlayer').classList.toggle('loaded', inlinePlayerState === 'playing');
+  $('#inlinePlayerLoading').classList.toggle('hidden', !['idle', 'loading'].includes(inlinePlayerState));
+  $('#inlinePlayerError').classList.toggle('hidden', !['error', 'unavailable'].includes(inlinePlayerState));
+  $('#inlinePlayerErrorTitle').textContent = inlinePlayerState === 'error' ? 'Impossible de charger la source' : 'Chargement prolongé';
+  if (message) $('#inlinePlayerErrorText').textContent = message;
+}
+
+function destroyInlineFrame() {
+  const host = $('#inlinePlayerFrameHost');
+  if (host) host.replaceChildren();
+}
+
+function mountInlineFrame(source) {
+  const safeSource = safeEmbedUrl(source);
+  destroyInlineFrame();
+  if (!safeSource) {
+    setInlinePlayerState('error', 'Cette source n’est pas autorisée par Vidzy — par Madra.');
+    return false;
+  }
+  const frame = document.createElement('iframe');
+  frame.id = 'inlinePlayerFrame';
+  frame.title = 'Lecteur vidéo Vidzy — par Madra';
+  frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation');
+  frame.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+  frame.setAttribute('allowfullscreen', '');
+  frame.referrerPolicy = 'strict-origin-when-cross-origin';
+  frame.addEventListener('load', () => {
+    if (!frame.isConnected || !frame.getAttribute('src')) return;
+    window.clearTimeout(inlineLoadTimer);
+    setInlinePlayerState('playing');
+  }, { once: true });
+  frame.addEventListener('error', () => {
+    if (!frame.isConnected) return;
+    destroyInlineFrame();
+    setInlinePlayerState('error', `Impossible de charger la source « ${inlineSourceContext?.name || 'sélectionnée'} ».`);
+    $('#inlinePlayerNextSource').classList.toggle('hidden', !inlineSourceContext?.next);
+  }, { once: true });
+  $('#inlinePlayerFrameHost').append(frame);
+  frame.src = safeSource;
+  setInlinePlayerState('loading');
+  return true;
+}
+
 function armInlineTimeout() {
   window.clearTimeout(inlineLoadTimer);
   inlineLoadTimer = window.setTimeout(() => {
-    if ($('#inlinePlayer').classList.contains('loaded')) return;
-    $('#inlinePlayerFrame').src = '';
-    $('#inlinePlayerLoading').classList.add('hidden');
-    $('#inlinePlayerErrorText').textContent = `La source « ${inlineSourceContext?.name || 'sélectionnée'} » ne répond pas. Vous pouvez réessayer, choisir la suivante ou revenir en arrière.`;
+    if (inlinePlayerState === 'playing') return;
+    setInlinePlayerState('unavailable', `Le chargement de « ${inlineSourceContext?.name || 'la source sélectionnée'} » prend plus de temps que prévu. Vous pouvez patienter, réessayer ou choisir la source suivante.`);
     $('#inlinePlayerNextSource').classList.toggle('hidden', !inlineSourceContext?.next);
-    $('#inlinePlayerError').classList.remove('hidden');
   }, 15000);
 }
 
@@ -164,6 +219,8 @@ function renderProfiles() {
 async function init() {
   renderProfiles();
   saveFavorites();
+  $('#setup').classList.add('hidden');
+  loading.classList.remove('hidden');
   if (location.hash === '#direct') {
     try { await enterLive(); } catch (error) {
       $('#liveGrid').innerHTML = retryMessage(error.message, 'live');
@@ -289,7 +346,7 @@ function setPlayerMode(active) {
 }
 
 function openGlobalSearch() {
-  $('#globalSearch').classList.remove('hidden');
+  setInteractiveVisibility($('#globalSearch'), true);
   document.body.classList.add('no-scroll');
   renderRecentSearches();
   loadGlobalGenres();
@@ -309,20 +366,18 @@ async function loadGlobalGenres() {
 }
 
 function closeGlobalSearch() {
-  $('#globalSearch').classList.add('hidden');
+  setInteractiveVisibility($('#globalSearch'), false);
   document.body.classList.remove('no-scroll');
 }
 
 function closePerson() {
-  $('#personPage').classList.add('hidden');
-  $('#personPage').setAttribute('aria-hidden', 'true');
+  setInteractiveVisibility($('#personPage'), false);
   if ($('#modal').classList.contains('hidden')) document.body.classList.remove('no-scroll');
 }
 
 async function openPerson(personId) {
   if (!/^\d+$/.test(String(personId || ''))) return;
-  $('#personPage').classList.remove('hidden');
-  $('#personPage').setAttribute('aria-hidden', 'false');
+  setInteractiveVisibility($('#personPage'), true);
   document.body.classList.add('no-scroll');
   $('#personName').textContent = 'Chargement…';
   $('#personMeta').textContent = '';
@@ -582,10 +637,16 @@ function renderEpgChannelGuide() {
   });
 }
 
-async function loadLiveChannels() {
+function loadLiveChannels(force = false) {
+  if (liveLoadPromise && !force) return liveLoadPromise;
+  if (force) liveLoadController?.abort();
+  const controller = new AbortController();
+  liveLoadController = controller;
   $('#liveGrid').innerHTML = '<div class="live-loading">Chargement des chaînes…</div>';
-  try {
-    const data = await json('/api/direct/channels');
+  $('#liveCount').textContent = 'Chargement…';
+  liveLoadPromise = (async () => {
+    try {
+    const data = await json('/api/direct/channels', { signal: controller.signal });
     liveChannels = Array.isArray(data.channels) ? data.channels : [];
     liveLoaded = true;
     if (!liveChannels.length) {
@@ -601,12 +662,25 @@ async function loadLiveChannels() {
     renderLiveChannels();
     renderEpgChannelGuide();
     loadEpgOverview();
-  } catch (error) {
-    $('#liveGrid').innerHTML = retryMessage(error.message || 'Impossible de charger le direct.', 'live');
-    $('#liveCount').textContent = 'Indisponible';
-  } finally {
-    if ($('#liveCount').textContent === 'Chargement…') $('#liveCount').textContent = liveChannels.length ? `${liveChannels.length} chaînes disponibles` : 'Indisponible';
-  }
+    } catch (error) {
+      if (controller.signal.aborted && liveLoadController !== controller) return;
+      if (liveChannels.length) {
+        renderLiveChannels();
+        $('#liveGrid').insertAdjacentHTML('afterbegin', '<div class="live-stale-notice">Dernière liste disponible — actualisation impossible.</div>');
+      } else {
+        $('#liveGrid').innerHTML = retryMessage(error.message || 'Impossible de charger les chaînes en direct.', 'live');
+        $('#liveCount').textContent = 'Direct indisponible';
+      }
+    } finally {
+      if ($('#liveCount').textContent === 'Chargement…') $('#liveCount').textContent = liveChannels.length ? `${liveChannels.length} chaînes disponibles` : 'Direct indisponible';
+    }
+  })().finally(() => {
+    if (liveLoadController === controller) {
+      liveLoadController = null;
+      liveLoadPromise = null;
+    }
+  });
+  return liveLoadPromise;
 }
 
 function renderLiveChannels() {
@@ -654,28 +728,30 @@ function renderLiveChannels() {
 
 function openLiveChannel(channel) {
   if (!channel || !/^[a-zA-Z0-9_-]{1,80}$/.test(channel.id || '')) return;
+  const changingSource = !$('#inlinePlayer').hidden;
   const source = `https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channel.id)}`;
   inlineReturnTarget = 'home';
-  inlineReturnUrl = location.href;
+  if (!changingSource) inlineReturnUrl = location.href;
   const index = liveChannels.findIndex(item => item.id === channel.id);
   const next = index >= 0 && liveChannels.length > 1 ? liveChannels[(index + 1) % liveChannels.length] : null;
   inlineSourceContext = { kind: 'live', name: channel.name || channel.id, url: source, next };
   inlineProgressContext = null;
   $('#inlinePlayerTitle').textContent = channel.name || 'Chaîne en direct';
-  $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'}`;
+  $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'} · Source active : Hesgoaler`;
   $('#inlinePlayerExternal').href = source;
   setInteractiveVisibility($('#inlinePlayer'), true);
   setPlayerMode(true);
-  $('#inlinePlayer').classList.remove('loaded');
-  $('#inlinePlayerError').classList.add('hidden');
+  setInlinePlayerState('idle');
   $('#inlinePlayerErrorText').textContent = '';
-  $('#inlinePlayerLoading').classList.remove('hidden');
   requestInlineFullscreen();
-  $('#inlinePlayerFrame').src = source;
-  armInlineTimeout();
-  const playerUrl = new URL(location.href);
-  playerUrl.hash = 'player';
-  history.pushState({ vidzyPlayer: true, liveChannel: channel.id }, '', playerUrl);
+  if (mountInlineFrame(source)) armInlineTimeout();
+  if (!changingSource) {
+    const playerUrl = new URL(location.href);
+    playerUrl.hash = 'player';
+    history.pushState({ vidzyPlayer: true, liveChannel: channel.id }, '', playerUrl);
+  } else {
+    history.replaceState({ vidzyPlayer: true, liveChannel: channel.id }, '', location.href);
+  }
 }
 
 function railMarkup(items, ranked = false) {
@@ -1228,16 +1304,13 @@ function openPlayerPage() {
   inlineSourceContext = { kind: 'media', name: $('#modalTitle').textContent || 'Vidzy', url: source, next: null };
   $('#inlinePlayerTitle').textContent = $('#modalTitle').textContent || 'Lecture Vidzy';
   const language = $('#playLanguage').value.toUpperCase();
-  $('#inlinePlayerMeta').textContent = `${isMovie ? 'Film' : `Saison ${season} · Épisode ${episode}`}${language ? ` · ${language}` : ''}`;
+  $('#inlinePlayerMeta').textContent = `${isMovie ? 'Film' : `Saison ${season} · Épisode ${episode}`}${language ? ` · ${language}` : ''} · Source active : Vidzy`;
   $('#inlinePlayerExternal').href = source;
   setInteractiveVisibility($('#inlinePlayer'), true);
   setPlayerMode(true);
-  $('#inlinePlayer').classList.remove('loaded');
+  setInlinePlayerState('idle');
   if (!inlineReturnTarget) inlineReturnTarget = 'detail';
-  $('#inlinePlayerError').classList.add('hidden');
-  $('#inlinePlayerLoading').classList.remove('hidden');
-  $('#inlinePlayerFrame').src = source;
-  armInlineTimeout();
+  if (mountInlineFrame(source)) armInlineTimeout();
   setInteractiveVisibility($('#modal'), false);
   inlineProgressContext = {
     key: isMovie ? `movie:${state.selected.id}` : `series:${state.selected.id}:${season}:${episode}`,
@@ -1301,8 +1374,8 @@ function restoreDetailAfterPlayer(updateHistory = true) {
   inlineProgressContext = null;
   setInteractiveVisibility($('#inlinePlayer'), false);
   setPlayerMode(false);
-  $('#inlinePlayer').classList.remove('loaded');
-  $('#inlinePlayerFrame').src = '';
+  setInlinePlayerState('idle');
+  destroyInlineFrame();
   inlineSourceContext = null;
   window.clearTimeout(inlineLoadTimer);
   const returnToDetail = inlineReturnTarget === 'detail';
@@ -1511,7 +1584,7 @@ $('#shareDetail').onclick = async () => {
   const shareUrl = new URL(location.origin + location.pathname);
   shareUrl.searchParams.set('type', state.selected.type);
   shareUrl.searchParams.set('id', String(state.selected.id));
-  const shareData = { title: $('#modalTitle').textContent, text: `Découvrez ${$('#modalTitle').textContent} sur Vidzy`, url: shareUrl.href };
+  const shareData = { title: $('#modalTitle').textContent, text: `Découvrez ${$('#modalTitle').textContent} sur Vidzy — par Madra`, url: shareUrl.href };
   try {
     if (navigator.share) await navigator.share(shareData);
     else await navigator.clipboard.writeText(shareUrl.href);
@@ -1521,13 +1594,11 @@ $('#shareDetail').onclick = async () => {
 };
 $('#libraryBtn').onclick = () => {
   renderLibrary();
-  $('#libraryPanel').classList.remove('hidden');
-  $('#libraryPanel').setAttribute('aria-hidden', 'false');
+  setInteractiveVisibility($('#libraryPanel'), true);
   document.body.classList.add('no-scroll');
 };
 $('#libraryClose').onclick = () => {
-  $('#libraryPanel').classList.add('hidden');
-  $('#libraryPanel').setAttribute('aria-hidden', 'true');
+  setInteractiveVisibility($('#libraryPanel'), false);
   document.body.classList.remove('no-scroll');
 };
 $('#libraryPanel').onclick = event => { if (event.target === $('#libraryPanel')) $('#libraryClose').click(); };
@@ -1553,24 +1624,12 @@ window.addEventListener('hashchange', applyHashRoute);
 window.addEventListener('popstate', applyHashRoute);
 $('#inlinePlayerBack').onclick = closeInlinePlayer;
 $('#inlinePlayerFullscreen').onclick = toggleInlineFullscreen;
-$('#inlinePlayerFrame').addEventListener('load', () => {
-  if (!$('#inlinePlayerFrame').getAttribute('src')) return;
-  window.clearTimeout(inlineLoadTimer);
-  $('#inlinePlayer').classList.add('loaded');
-  $('#inlinePlayerLoading').classList.add('hidden');
-  $('#inlinePlayerError').classList.add('hidden');
-});
 $('#inlinePlayerRetry').onclick = () => {
-  const frame = $('#inlinePlayerFrame');
   const source = inlineSourceContext?.url;
   if (!source) return;
-  $('#inlinePlayer').classList.remove('loaded');
-  $('#inlinePlayerError').classList.add('hidden');
-  $('#inlinePlayerLoading').classList.remove('hidden');
   const retrySource = new URL(source);
   retrySource.searchParams.set('_retry', String(Date.now()));
-  frame.src = retrySource.toString();
-  armInlineTimeout();
+  if (mountInlineFrame(retrySource.toString())) armInlineTimeout();
 };
 $('#inlinePlayerNextSource').onclick = () => {
   const next = inlineSourceContext?.next;
@@ -1581,7 +1640,8 @@ document.addEventListener('click', event => {
   if (!button) return;
   const action = button.dataset.retry || '';
   if (action === 'catalogue') load();
-  else if (action === 'live') { liveLoaded = false; loadLiveChannels(); }
+  else if (action === 'live') { liveLoaded = false; loadLiveChannels(true); }
+  else if (action === 'startup') init();
   else if (action === 'epg') loadEpg();
   else if (action === 'epg-refresh') $('#epgRefresh').click();
   else if (action.startsWith('mood:')) loadMood(action.slice(5));

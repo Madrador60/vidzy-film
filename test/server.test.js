@@ -3,7 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { app, normalizeItem } = require('../server');
+const { app, normalizeItem, parseDirectChannels } = require('../server');
+const { fetchWithTimeout } = require('../lib/fetch-timeout');
 
 test('GET /api/health retourne un état cohérent sans secret', async () => {
   const response = await request(app).get('/api/health').expect(200);
@@ -112,5 +113,34 @@ test('les nouvelles routes Direct et EPG existent et gardent une enveloppe cohé
     assert.equal(direct.body.data.channels[0].id, 'TF1FR');
   } finally {
     global.fetch = previousFetch;
+  }
+});
+
+test('parse, valide et déduplique le catalogue de chaînes', () => {
+  const channels = parseDirectChannels([
+    { channel_name: 'TF1', url: 'https://hesgoaler.com/madra.php?ch=TF1FR', country: 'France' },
+    { channel_name: 'TF1 doublon', url: 'https://hesgoaler.com/madra.php?ch=TF1FR' },
+    { channel_name: 'Interdite', url: 'https://evil.example/watch?ch=TF1FR' },
+    { channel_name: 'Sans identifiant', url: 'https://hesgoaler.com/madra.php' }
+  ]);
+  assert.equal(channels.length, 1);
+  assert.equal(channels[0].id, 'TF1FR');
+  assert.equal(channels[0].sources[0], 'https://hesgoaler.com/madra.php?ch=TF1FR');
+});
+
+test('annule une requête réseau qui dépasse le délai', async () => {
+  const slowFetch = (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+  });
+  await assert.rejects(fetchWithTimeout('https://example.test', {}, 10, slowFetch), error => error.name === 'AbortError');
+});
+
+test('TMDB absent reste une réponse publique propre sans nom de variable', async () => {
+  const config = await request(app).get('/api/config').expect(200);
+  assert.equal(typeof config.body.data.tmdbConfigured, 'boolean');
+  if (!config.body.data.tmdbConfigured) {
+    const catalogue = await request(app).get('/api/catalog/movie').expect(503);
+    assert.equal(catalogue.body.ok, false);
+    assert.equal(/TMDB_|\.env/i.test(catalogue.body.error), false);
   }
 });
