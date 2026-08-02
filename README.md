@@ -53,10 +53,19 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 - lecteur plein écran, choix VF/VOSTFR, retour vers la fiche et progression locale ;
 - épisodes terminés et dernier épisode sélectionné mémorisés par profil ;
 - Ma liste, historique, suppression individuelle et suppression globale confirmée ;
-- profils locaux séparés, sans compte serveur ;
-- télévision et sport à partir du flux externe configuré ;
+- profil local unique Madra, sans compte serveur ;
+- télévision et sport lancés immédiatement à partir du flux externe configuré ;
+- guide TV français accessible depuis le Direct, fourni par `epg.pw` ;
 - PWA installable avec page hors connexion ;
 - API protégée par CSP, Helmet, limitation de débit, validation, cache borné et déduplication des requêtes TMDB.
+
+## Versions récentes
+
+- **Vidzy 4.0** : Mon espace, statistiques, ambiances, coups de cœur et bouton « Surprenez-moi ».
+- **Vidzy 3.0** : fiches partageables, recherche par genre, reprise des séries et interface recentrée.
+- **Direct** : lecture immédiate, plein écran, isolation des pop-ups et accès au guide TV français.
+
+Le guide est consultable sur [epg.pw — France](https://epg.pw/areas/fr/epg.html?lang=en). Sa couverture dépend des chaînes référencées par ce service externe.
 
 ## Structure
 

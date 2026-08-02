@@ -5,7 +5,6 @@
   const valid = /^[a-zA-Z0-9_-]{1,80}$/.test(channelId);
   const player = document.querySelector('#livePlayer');
   const fullscreenButton = document.querySelector('#fullscreenBtn');
-  const startFullscreen = document.querySelector('#startFullscreen');
   const adShield = document.querySelector('#adShield');
   document.querySelector('#channelName').textContent = name;
   document.title = `${name} — Vidzy Direct`;
@@ -17,7 +16,6 @@
     document.querySelector('#error').classList.remove('hidden');
     player.classList.add('hidden');
     fullscreenButton.classList.add('hidden');
-    startFullscreen.classList.add('hidden');
     adShield.classList.add('hidden');
     return;
   }
@@ -26,19 +24,15 @@
   const enterFullscreen = async () => {
     try {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      startFullscreen.classList.add('hidden');
-    } catch { startFullscreen.classList.remove('hidden'); }
+    } catch {}
   };
   fullscreenButton.addEventListener('click', enterFullscreen);
-  startFullscreen.addEventListener('click', enterFullscreen);
   player.addEventListener('load', () => {
-    startFullscreen.classList.remove('hidden');
     enterFullscreen();
   }, { once: true });
   document.addEventListener('fullscreenchange', () => {
     const active = Boolean(document.fullscreenElement);
     fullscreenButton.textContent = active ? '× Quitter le plein écran' : '⛶ Plein écran';
-    startFullscreen.classList.toggle('hidden', active);
   });
   adShield.addEventListener('contextmenu', event => event.preventDefault());
 })();
