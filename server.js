@@ -4,7 +4,8 @@ const helmet = require('helmet');
 const path = require('path');
 const packageJson = require('./package.json');
 const { BoundedCache } = require('./lib/bounded-cache');
-const { EpgService } = require('./lib/epg-service');
+const { EpgService, programProgress } = require('./lib/epg-service');
+const { fetchWithTimeout } = require('./lib/fetch-timeout');
 const validation = require('./lib/validation');
 require('dotenv').config();
 
@@ -15,6 +16,7 @@ const TMDB_TOKEN = String(process.env.TMDB_BEARER_TOKEN || '').trim();
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const LIVE_FEED = 'https://hesgoaler.com/madra.json';
 let liveCache = { expires: 0, channels: [] };
+let livePending = null;
 const epgService = new EpgService();
 const vidzyAvailabilityCache = new BoundedCache({ maxEntries: 2000, ttlMs: 10 * 60 * 1000 });
 const tmdbCache = new BoundedCache({ maxEntries: 1200, ttlMs: 10 * 60 * 1000 });
@@ -33,7 +35,7 @@ function routeError(error, fallback = 'Impossible de charger le contenu.') {
   if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
     return { status: 504, message: 'La source ne répond pas. Réessayez dans un instant.' };
   }
-  return { status: status >= 400 && status < 500 ? status : 502, message: fallback };
+  return { status: status >= 400 && status < 600 ? status : 502, message: fallback };
 }
 
 function sendRouteError(res, error, fallback) {
@@ -110,7 +112,12 @@ app.use('/api', (req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: true,
-  maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0
+  maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0,
+  setHeaders: (res, filePath) => {
+    if (/\.(?:html)$/i.test(filePath) || /[\\/]sw\.js$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
 }));
 
 async function tmdbRequest(endpoint, query = {}) {
@@ -263,37 +270,40 @@ app.get('/api/image/:size/:filename', async (req, res) => {
   }
 });
 
+function parseDirectChannels(source) {
+  const parsedChannels = (Array.isArray(source) ? source : []).flatMap((item) => {
+    try {
+      const streamUrl = new URL(String(item.url || ''));
+      const channelId = streamUrl.hostname === 'hesgoaler.com' && streamUrl.pathname === '/madra.php'
+        ? streamUrl.searchParams.get('ch') : '';
+      if (!channelId || !/^[a-zA-Z0-9_-]{1,80}$/.test(channelId)) return [];
+      const image = String(item.image || '');
+      return [{
+        id: channelId,
+        name: String(item.channel_name || channelId).trim().slice(0, 100),
+        image: /^https?:\/\//i.test(image) ? image : '',
+        logo: /^https?:\/\//i.test(image) ? image : '',
+        country: String(item.country || 'International').trim().slice(0, 60),
+        category: String(item.category || 'General').trim().slice(0, 40),
+        language: String(item.language || '').trim().slice(0, 30),
+        sources: [`https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channelId)}`]
+      }];
+    } catch { return []; }
+  });
+  return [...new Map(parsedChannels.map(channel => [channel.id, channel])).values()];
+}
+
 async function loadDirectChannels() {
-  try {
-    if (Date.now() < liveCache.expires && liveCache.channels.length) {
-      return { channels: liveCache.channels, cached: true };
-    }
-    const response = await fetch(LIVE_FEED, {
-      headers: { accept: 'application/json', 'user-agent': 'VidzyLive/1.0' },
-      signal: AbortSignal.timeout(15000)
-    });
+  if (Date.now() < liveCache.expires && liveCache.channels.length) return { channels: liveCache.channels, cached: true };
+  if (livePending) return livePending;
+  livePending = (async () => {
+    try {
+    const response = await fetchWithTimeout(LIVE_FEED, {
+      headers: { accept: 'application/json', 'user-agent': 'VidzyDirect/2.0' }
+    }, 15000);
     if (!response.ok) throw new Error(`Flux direct indisponible (${response.status}).`);
     const source = await response.json();
-    const parsedChannels = (Array.isArray(source) ? source : []).flatMap((item) => {
-      try {
-        const streamUrl = new URL(String(item.url || ''));
-        const channelId = streamUrl.hostname === 'hesgoaler.com' && streamUrl.pathname === '/madra.php'
-          ? streamUrl.searchParams.get('ch') : '';
-        if (!channelId || !/^[a-zA-Z0-9_-]{1,80}$/.test(channelId)) return [];
-        const image = String(item.image || '');
-        return [{
-          id: channelId,
-          name: String(item.channel_name || channelId).trim().slice(0, 100),
-          image: /^https?:\/\//i.test(image) ? image : '',
-          logo: /^https?:\/\//i.test(image) ? image : '',
-          country: String(item.country || 'International').trim().slice(0, 60),
-          category: String(item.category || 'General').trim().slice(0, 40),
-          language: String(item.language || '').trim().slice(0, 30),
-          sources: [`https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channelId)}`]
-        }];
-      } catch { return []; }
-    });
-    const channels = [...new Map(parsedChannels.map(channel => [channel.id, channel])).values()];
+    const channels = parseDirectChannels(source);
     if (!channels.length) throw new Error('La source Direct ne contient aucune chaîne valide.');
     liveCache = { expires: Date.now() + 5 * 60 * 1000, channels };
     return { channels, cached: false };
@@ -301,7 +311,9 @@ async function loadDirectChannels() {
     console.warn('[direct]', error.message);
     if (liveCache.channels.length) return { channels: liveCache.channels, cached: true, stale: true };
     throw error;
-  }
+    }
+  })().finally(() => { livePending = null; });
+  return livePending;
 }
 
 async function directRoute(_req, res) {
@@ -327,7 +339,7 @@ function serializeProgram(program, now = Date.now()) {
     start: start.toISOString(),
     end: end.toISOString(),
     current,
-    progress: current ? Math.max(0, Math.min(100, Math.round(((now - start.getTime()) / (end.getTime() - start.getTime())) * 100))) : 0
+    progress: current ? programProgress({ start, end }, now) : 0
   };
 }
 
@@ -729,4 +741,4 @@ if (require.main === module) {
   process.once('SIGINT', () => shutdown('SIGINT'));
 }
 
-module.exports = { app, startServer, normalizeItem, epgService };
+module.exports = { app, startServer, normalizeItem, epgService, parseDirectChannels };

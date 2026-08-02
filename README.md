@@ -1,6 +1,6 @@
-# Vidzy
+# Vidzy — par Madra
 
-Vidzy est une interface de découverte et de lecture de films, séries, télévision et sport. Le catalogue et les métadonnées proviennent de TMDB. La disponibilité vidéo dépend de Vidzy et les chaînes en direct du flux configuré dans le serveur.
+Vidzy — par Madra est une interface de découverte et de lecture de films, séries, télévision et sport. Le catalogue et les métadonnées proviennent de TMDB. La disponibilité vidéo dépend de Vidzy et les chaînes en direct du flux configuré dans le serveur.
 
 ## Prérequis
 
@@ -27,6 +27,8 @@ ALLOWED_PLAYER_HOSTS=vidzy.org,www.vidzy.org,hesgoaler.com,www.youtube-nocookie.
 ```
 
 Le projet utilise uniquement `TMDB_BEARER_TOKEN` (jeton de lecture API TMDB v4). Ne publie jamais `.env` et n’expose jamais ce jeton au navigateur.
+
+Si ce secret manque, le serveur journalise clairement l’erreur de configuration mais continue de servir le Direct et l’EPG. L’interface publique affiche uniquement un message temporaire avec un bouton Réessayer, sans révéler le nom du secret ni d’instruction technique.
 
 ## Commandes
 
@@ -69,6 +71,8 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 Le guide est consultable en français sur [epg.pw — France](https://epg.pw/areas/fr.html?lang=fr). Sa couverture dépend des chaînes référencées par ce service externe.
 
 Le serveur télécharge `https://epg.pw/xmltv/epg_FR.xml.gz`, le décompresse et le parse en streaming. La grille est conservée en mémoire pendant huit heures, rafraîchie automatiquement et réutilisée en mode dégradé si la source devient momentanément indisponible. Les alias de chaînes sont centralisés dans `lib/epg-service.js` pour faciliter l’ajout de nouveaux mappings ou de nouvelles sources XMLTV.
+
+Le service worker utilise une stratégie réseau prioritaire pour le JavaScript et le CSS. Les pages HTML et `sw.js` sont servis sans cache persistant afin qu’une ancienne interface ne survive pas à un redéploiement Render.
 
 Routes Direct et Programme TV :
 

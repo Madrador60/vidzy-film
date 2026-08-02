@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Readable } = require('node:stream');
 const { gzipSync } = require('node:zlib');
-const { EpgService, normalizeChannelName, parseXmltvDate, parseXmltvStream } = require('../lib/epg-service');
+const { EpgService, normalizeChannelName, parseXmltvDate, parseXmltvStream, programProgress } = require('../lib/epg-service');
 
 const XMLTV = `<?xml version="1.0"?><tv>
 <channel id="tf1.fr"><display-name>TF1 HD</display-name></channel>
@@ -41,6 +41,13 @@ test('associe les variantes IPTV aux chaînes EPG', () => {
   assert.equal(service.matchChannel('beIN SPORTS USA'), null);
 });
 
+test('calcule et borne la progression du programme en cours', () => {
+  const program = { start: new Date('2026-08-02T18:00:00Z'), end: new Date('2026-08-02T20:00:00Z') };
+  assert.equal(programProgress(program, Date.parse('2026-08-02T19:00:00Z')), 50);
+  assert.equal(programProgress(program, Date.parse('2026-08-02T17:00:00Z')), 0);
+  assert.equal(programProgress(program, Date.parse('2026-08-02T20:00:00Z')), 0);
+});
+
 test('met le XMLTV en cache et conserve la dernière grille si la source tombe', async () => {
   let calls = 0;
   let fail = false;
@@ -56,4 +63,11 @@ test('met le XMLTV en cache et conserve la dernière grille si la source tombe',
   const stale = await service.refresh(true);
   assert.equal(stale.channels.size, 2);
   assert.equal(service.lastError, 'source coupée');
+});
+
+test('signale proprement une source EPG absente sans créer de grille vide', async () => {
+  const service = new EpgService({ fetchImpl: async () => { throw new Error('EPG hors ligne'); } });
+  await assert.rejects(service.refresh(), /EPG hors ligne/);
+  assert.equal(service.status().available, false);
+  assert.equal(service.status().lastError, 'EPG hors ligne');
 });
