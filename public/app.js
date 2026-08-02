@@ -183,7 +183,7 @@ async function init() {
     await refreshLocalCollections();
     await loadHome();
     if (location.hash === '#movies' || location.hash === '#series') {
-      document.querySelector(`.tab[data-type="${location.hash === '#movies' ? 'movie' : 'serie'}"]`)?.click();
+      document.querySelector(`.tab[data-type="${location.hash === '#movies' ? 'movie' : 'series'}"]`)?.click();
     }
     const sharedParams = new URLSearchParams(location.search);
     const sharedType = sharedParams.get('type');
@@ -1343,10 +1343,10 @@ async function checkVidzy() {
 
 document.querySelectorAll('.tab[data-type]').forEach((button) => {
   button.addEventListener('click', async () => {
+    state.type = button.dataset.type;
     showCatalogueView(false);
     document.querySelectorAll('.tab').forEach((item) => item.classList.remove('active'));
     button.classList.add('active');
-    state.type = button.dataset.type;
     state.page = 1;
     state.query = '';
     state.favoritesOnly = false;
@@ -1547,7 +1547,7 @@ function applyHashRoute() {
   if (location.hash === '#direct' && $('#liveView').classList.contains('hidden')) enterLive();
   else if (location.hash === '#home' && $('#hero').classList.contains('hidden')) $('#homeTab').click();
   else if (location.hash === '#movies' && (state.type !== 'movie' || $('.catalogue').classList.contains('hidden'))) document.querySelector('.tab[data-type="movie"]')?.click();
-  else if (location.hash === '#series' && (state.type !== 'serie' || $('.catalogue').classList.contains('hidden'))) document.querySelector('.tab[data-type="serie"]')?.click();
+  else if (location.hash === '#series' && (state.type !== 'series' || $('.catalogue').classList.contains('hidden'))) document.querySelector('.tab[data-type="series"]')?.click();
 }
 window.addEventListener('hashchange', applyHashRoute);
 window.addEventListener('popstate', applyHashRoute);
