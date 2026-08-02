@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { app, normalizeItem, parseEpgPrograms } = require('../server');
+const { app, normalizeItem } = require('../server');
 
 test('GET /api/health retourne un état cohérent sans secret', async () => {
   const response = await request(app).get('/api/health').expect(200);
@@ -85,14 +85,6 @@ test('le serveur écoute par défaut sur toutes les interfaces', async (t) => {
 test('le serveur reste stable sous plusieurs requêtes successives', async () => {
   const responses = await Promise.all(Array.from({ length: 40 }, () => request(app).get('/api/health')));
   assert.equal(responses.every(response => response.status === 200 && response.body.ok === true), true);
-});
-
-test('le parseur EPG extrait les horaires et titres nettoyés', () => {
-  const html = '<a class="panel-block"><span class="has-text-weight-bold px-1">20:00</span> JT 20h </a><a class="panel-block"><span class="has-text-weight-bold">20:45</span><b>Le goût du détail</b></a>';
-  assert.deepEqual(parseEpgPrograms(html), [
-    { time: '20:00', title: 'JT 20h' },
-    { time: '20:45', title: 'Le goût du détail' }
-  ]);
 });
 
 test('la route EPG refuse un nom vide avant tout appel externe', async () => {

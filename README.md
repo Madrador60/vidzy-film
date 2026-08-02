@@ -55,7 +55,7 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 - Ma liste, historique, suppression individuelle et suppression globale confirmée ;
 - profil local unique Madra, sans compte serveur ;
 - télévision et sport lancés immédiatement à partir du flux externe configuré ;
-- guide TV français accessible depuis le Direct, fourni par `epg.pw` ;
+- guide TV XMLTV français intégré au Direct, fourni par EPG.PW, avec programmes en cours/suivants et progression ;
 - PWA installable avec page hors connexion ;
 - API protégée par CSP, Helmet, limitation de débit, validation, cache borné et déduplication des requêtes TMDB.
 
@@ -67,6 +67,8 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 - **Direct** : lecture immédiate, plein écran, isolation des pop-ups et accès au guide TV français.
 
 Le guide est consultable en français sur [epg.pw — France](https://epg.pw/areas/fr.html?lang=fr). Sa couverture dépend des chaînes référencées par ce service externe.
+
+Le serveur télécharge `https://epg.pw/xmltv/epg_FR.xml.gz`, le décompresse et le parse en streaming. La grille est conservée en mémoire pendant huit heures, rafraîchie automatiquement et réutilisée en mode dégradé si la source devient momentanément indisponible. Les alias de chaînes sont centralisés dans `lib/epg-service.js` pour faciliter l’ajout de nouveaux mappings ou de nouvelles sources XMLTV.
 
 ## Structure
 

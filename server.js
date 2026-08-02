@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const path = require('path');
 const packageJson = require('./package.json');
 const { BoundedCache } = require('./lib/bounded-cache');
+const { EpgService } = require('./lib/epg-service');
 const validation = require('./lib/validation');
 require('dotenv').config();
 
@@ -14,8 +15,7 @@ const TMDB_TOKEN = String(process.env.TMDB_BEARER_TOKEN || process.env.TMDB_READ
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const LIVE_FEED = 'https://hesgoaler.com/madra.json';
 let liveCache = { expires: 0, channels: [] };
-let epgDirectoryCache = { expires: 0, channels: [] };
-const epgScheduleCache = new BoundedCache({ maxEntries: 100, ttlMs: 15 * 60 * 1000 });
+const epgService = new EpgService();
 const vidzyAvailabilityCache = new BoundedCache({ maxEntries: 2000, ttlMs: 10 * 60 * 1000 });
 const tmdbCache = new BoundedCache({ maxEntries: 1200, ttlMs: 10 * 60 * 1000 });
 const tmdbPending = new Map();
@@ -223,45 +223,6 @@ function tmdbImageUrl(size, imagePath) {
   return filename ? `/api/image/${size}/${encodeURIComponent(filename)}` : '';
 }
 
-function decodeHtml(value = '') {
-  const named = { amp: '&', quot: '"', apos: "'", '#39': "'", nbsp: ' ', lt: '<', gt: '>' };
-  return String(value).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity) => {
-    const key = entity.toLowerCase();
-    if (named[key] !== undefined) return named[key];
-    if (key[0] === '#') {
-      const number = Number.parseInt(key[1] === 'x' ? key.slice(2) : key.slice(1), key[1] === 'x' ? 16 : 10);
-      return Number.isFinite(number) ? String.fromCodePoint(number) : match;
-    }
-    return match;
-  });
-}
-
-function cleanHtmlText(value = '') {
-  return decodeHtml(String(value).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
-}
-
-async function epgDirectory() {
-  if (Date.now() < epgDirectoryCache.expires && epgDirectoryCache.channels.length) return epgDirectoryCache.channels;
-  const response = await fetch('https://epg.pw/areas/fr.html?lang=fr', {
-    headers: { accept: 'text/html', 'user-agent': 'VidzyEPG/1.0' },
-    signal: AbortSignal.timeout(15000)
-  });
-  if (!response.ok) throw new Error(`EPG indisponible (${response.status})`);
-  const html = await response.text();
-  const channels = [...html.matchAll(/href="\/last\/(\d+)\.html\?lang=[^"]+"[^>]*>([^<]+)<\/a>/gi)]
-    .map(match => ({ id: match[1], name: cleanHtmlText(match[2]).slice(0, 100) }))
-    .filter(channel => channel.name);
-  epgDirectoryCache = { expires: Date.now() + 6 * 60 * 60 * 1000, channels };
-  return channels;
-}
-
-function parseEpgPrograms(html) {
-  return [...String(html).matchAll(/<span class="[^"]*has-text-weight-bold[^"]*"[^>]*>\s*(\d{1,2}:\d{2})\s*<\/span>([\s\S]*?)(?=<div class="dropdown-menu"|<\/a>)/gi)]
-    .map(match => ({ time: match[1].padStart(5, '0'), title: cleanHtmlText(match[2]).slice(0, 180) }))
-    .filter(program => program.title)
-    .slice(0, 80);
-}
-
 app.get('/api/health', (_req, res) => res.json({
   ok: true,
   data: {
@@ -345,24 +306,36 @@ app.get('/api/epg', async (req, res) => {
   const requested = String(req.query.channel || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
   if (!requested || requested.length > 100) return res.status(400).json({ error: 'Nom de chaîne invalide.' });
   try {
-    const channels = await epgDirectory();
-    const normalized = requested.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const channel = channels.find(item => item.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === normalized)
-      || channels.find(item => item.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(normalized));
-    if (!channel) return res.status(404).json({ error: 'Programme indisponible pour cette chaîne.' });
-    const cached = epgScheduleCache.get(channel.id);
-    if (cached) return res.json(cached);
-    const response = await fetch(`https://epg.pw/last/${channel.id}.html?lang=fr`, {
-      headers: { accept: 'text/html', 'user-agent': 'VidzyEPG/1.0' },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!response.ok) throw new Error(`Programme indisponible (${response.status})`);
-    const programs = parseEpgPrograms(await response.text());
-    const result = { channel: channel.name, programs, source: 'EPG.pw', updatedAt: new Date().toISOString() };
-    epgScheduleCache.set(channel.id, result);
-    res.json(result);
+    const guide = await epgService.guide(requested, 36);
+    if (!guide) return res.status(404).json({ error: 'Programme indisponible pour cette chaîne.' });
+    const now = Date.now();
+    res.json({ ...guide, programs: guide.programs.map(program => ({
+      title: program.title, description: program.description, category: program.category,
+      start: program.start.toISOString(), end: program.end.toISOString(),
+      current: program.start.getTime() <= now && program.end.getTime() > now,
+      progress: program.start.getTime() <= now && program.end.getTime() > now
+        ? Math.round(((now - program.start.getTime()) / (program.end.getTime() - program.start.getTime())) * 100) : 0
+    })) });
   } catch (error) {
     sendRouteError(res, error, 'Impossible de charger le programme TV.');
+  }
+});
+
+app.get('/api/epg-overview', async (_req, res) => {
+  try {
+    const overview = await epgService.overview(liveCache.channels.map(channel => channel.name));
+    const now = Date.now();
+    const channels = Object.fromEntries(Object.entries(overview.channels).map(([name, entry]) => [name, {
+      ...entry,
+      current: entry.current ? {
+        title: entry.current.title, start: entry.current.start, end: entry.current.end,
+        progress: Math.max(0, Math.min(100, Math.round(((now - entry.current.start) / (entry.current.end - entry.current.start)) * 100)))
+      } : null,
+      next: entry.next ? { title: entry.next.title, start: entry.next.start, end: entry.next.end } : null
+    }]));
+    res.json({ ...overview, channels });
+  } catch (error) {
+    sendRouteError(res, error, 'Impossible de charger le résumé du guide TV.');
   }
 });
 
@@ -675,6 +648,9 @@ function startServer(port = PORT, host = '0.0.0.0') {
 
 if (require.main === module) {
   const server = startServer();
+  epgService.refresh().catch(error => console.warn('[epg]', error.message));
+  const epgRefreshTimer = setInterval(() => epgService.refresh(true).catch(error => console.warn('[epg]', error.message)), 8 * 60 * 60 * 1000);
+  epgRefreshTimer.unref();
   const shutdown = signal => {
     console.log(`${signal} reçu, arrêt propre du serveur…`);
     server.close(() => process.exit(0));
@@ -684,4 +660,4 @@ if (require.main === module) {
   process.once('SIGINT', () => shutdown('SIGINT'));
 }
 
-module.exports = { app, startServer, normalizeItem, parseEpgPrograms };
+module.exports = { app, startServer, normalizeItem, epgService };
