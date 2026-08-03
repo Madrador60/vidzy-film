@@ -123,21 +123,22 @@ function safeExternalUrl(value = '') {
 }
 
 async function json(url, options = {}) {
+  const { timeout = 12000, ...fetchOptions } = options;
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const timeoutId = window.setTimeout(() => controller.abort(), Math.max(1000, Number(timeout) || 12000));
   const abort = () => controller.abort();
-  options.signal?.addEventListener('abort', abort, { once: true });
+  fetchOptions.signal?.addEventListener('abort', abort, { once: true });
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal, headers: { accept: 'application/json', ...(options.headers || {}) } });
+    const response = await fetch(url, { ...fetchOptions, signal: controller.signal, headers: { accept: 'application/json', ...(fetchOptions.headers || {}) } });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload.ok === false) throw new Error(payload.error || 'Impossible de charger le contenu.');
     return payload.ok === true && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
   } catch (error) {
-    if (error.name === 'AbortError' && !options.signal?.aborted) throw new Error('La source ne répond pas. Réessayez.');
+    if (error.name === 'AbortError' && !fetchOptions.signal?.aborted) throw new Error('La source ne répond pas. Réessayez.');
     throw error;
   } finally {
-    window.clearTimeout(timeout);
-    options.signal?.removeEventListener('abort', abort);
+    window.clearTimeout(timeoutId);
+    fetchOptions.signal?.removeEventListener('abort', abort);
   }
 }
 
@@ -1537,7 +1538,7 @@ $('#epgAvailability').addEventListener('change', renderEpgChannelGuide);
 $('#epgRefresh').onclick = () => {
   liveEpgLoaded = false;
   $('#epgCoverage').textContent = 'Actualisation de la grille TV…';
-  json('/api/epg/refresh', { method: 'POST' })
+  json('/api/epg/refresh', { method: 'POST', timeout: 35000 })
     .then(() => Promise.all([loadEpgOverview(), loadEpg()]))
     .catch(error => { $('#epgCoverage').innerHTML = retryMessage(error.message, 'epg-refresh'); });
 };
