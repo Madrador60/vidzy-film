@@ -23,6 +23,7 @@ let liveClockTimer = 0;
 let globalSearchTimer = 0;
 let globalSearchItems = [];
 let globalSearchController = null;
+let detailController = null;
 let recentSearches = readLocalList('vidzy-recent-searches-v1').filter(value => typeof value === 'string').slice(0, 6);
 let featuredItems = [];
 let featuredIndex = 0;
@@ -1053,10 +1054,14 @@ function updatePager() {
 }
 
 async function openItem(type, id, item = null, syncUrl = true) {
+  detailController?.abort();
+  const controller = new AbortController();
+  detailController = controller;
   try {
     state.selected = { type, id };
     state.selectedItem = item;
-    const details = await json(`/api/details/${type}/${id}`);
+    const details = await json(`/api/details/${type}/${id}`, { signal: controller.signal });
+    if (controller.signal.aborted || detailController !== controller) return;
     setInteractiveVisibility($('#modal'), true);
     document.body.classList.add('no-scroll');
     if (syncUrl) {
@@ -1154,7 +1159,10 @@ async function openItem(type, id, item = null, syncUrl = true) {
     renderRecommendations(details.similar?.results || [], '#similarSection', '#similarRail');
     loadTrailer(type, id);
   } catch (error) {
+    if (controller.signal.aborted) return;
     alert(`Impossible d’ouvrir ce contenu : ${error.message}`);
+  } finally {
+    if (detailController === controller) detailController = null;
   }
 }
 
@@ -1457,6 +1465,8 @@ function changePage(delta) { state.page = Math.min(state.totalPages, Math.max(1,
 $('#prev').onclick = $('#prev2').onclick = () => changePage(-1);
 $('#next').onclick = $('#next2').onclick = () => changePage(1);
 function closeModal() {
+  detailController?.abort();
+  detailController = null;
   $('#trailerPlayer').src = '';
   setInteractiveVisibility($('#modal'), false);
   $('#modalHero').classList.remove('hidden');
