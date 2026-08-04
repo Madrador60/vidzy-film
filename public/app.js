@@ -811,7 +811,7 @@ function renderLiveChannels() {
   });
 }
 
-function openLiveChannel(channel) {
+async function openLiveChannel(channel) {
   if (!channel || !/^[a-zA-Z0-9_-]{1,80}$/.test(channel.id || '')) return;
   const changingSource = !$('#inlinePlayer').hidden;
   const iframeSource = channel.sources?.[0] || `https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channel.id)}`;
@@ -821,17 +821,40 @@ function openLiveChannel(channel) {
   if (!changingSource) inlineReturnUrl = location.href;
   const index = liveChannels.findIndex(item => item.id === channel.id);
   const next = index >= 0 && liveChannels.length > 1 ? liveChannels[(index + 1) % liveChannels.length] : null;
-  inlineSourceContext = { kind: 'live', name: channel.name || channel.id, url: source, next, hls: Boolean(hlsSource) };
+  const context = { kind: 'live', name: channel.name || channel.id, url: source, next, hls: Boolean(hlsSource) };
+  inlineSourceContext = context;
   inlineProgressContext = null;
   $('#inlinePlayerTitle').textContent = channel.name || 'Chaîne en direct';
-  $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'} · Source active : ${hlsSource ? 'HLS' : 'Hesgoaler'}`;
+  $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'} · Source active : ${hlsSource ? 'HLS (validation…)' : 'Hesgoaler'}`;
   $('#inlinePlayerExternal').href = source;
   setInteractiveVisibility($('#inlinePlayer'), true);
   setPlayerMode(true);
   setInlinePlayerState('idle');
   $('#inlinePlayerErrorText').textContent = '';
   requestInlineFullscreen();
-  if (hlsSource ? mountInlineHls(source) : mountInlineFrame(source)) armInlineTimeout();
+  if (hlsSource) {
+    setInlinePlayerState('loading', 'Validation sécurisée du flux direct…');
+    try {
+      const validated = await json(`/api/direct/hls/${encodeURIComponent(channel.id)}`, { timeout: 10000 });
+      if (inlineSourceContext !== context || $('#inlinePlayer').hidden) return;
+      context.url = safeHlsSource(validated.url);
+      if (!context.url) throw new Error('Le serveur a refusé ce flux HLS.');
+      $('#inlinePlayerExternal').href = context.url;
+      $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'} · Source active : HLS`;
+      if (mountInlineHls(context.url)) armInlineTimeout();
+    } catch (error) {
+      if (inlineSourceContext !== context || $('#inlinePlayer').hidden) return;
+      if (iframeSource) {
+        context.url = iframeSource;
+        context.hls = false;
+        $('#inlinePlayerExternal').href = iframeSource;
+        $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'} · Source active : Hesgoaler (secours)`;
+        if (mountInlineFrame(iframeSource)) armInlineTimeout();
+      } else {
+        setInlinePlayerState('error', error.message || 'Le flux HLS est indisponible.');
+      }
+    }
+  } else if (mountInlineFrame(source)) armInlineTimeout();
   if (!changingSource) {
     const playerUrl = new URL(location.href);
     playerUrl.hash = 'player';
