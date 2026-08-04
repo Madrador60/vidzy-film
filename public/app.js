@@ -619,37 +619,11 @@ async function enterLive(categoryHint = '', activeButton = $('#liveTab')) {
     if (liveLoaded) loadEpgOverview();
   }, 60_000);
   if (!liveLoaded) await loadLiveChannels();
-  if (!epgLoaded) loadEpg();
+  if (!liveEpgLoaded) loadEpgOverview();
   if (categoryHint) {
     const matching = [...$('#liveCategory').options].find(option => option.value.toLocaleLowerCase('fr').includes(categoryHint));
     if (matching) $('#liveCategory').value = matching.value;
     renderLiveChannels();
-  }
-}
-
-async function loadEpg(channelName = '') {
-  const channel = channelName || $('#epgSelectedTitle').dataset.channel || 'TF1';
-  $('#epgSelectedTitle').textContent = channel;
-  $('#epgSelectedTitle').dataset.channel = channel;
-  $('#epgPrograms').innerHTML = '<div class="epg-loading">Chargement du programme…</div>';
-  try {
-    const data = await json(`/api/epg?channel=${encodeURIComponent(channel)}`);
-    epgLoaded = true;
-    const programs = Array.isArray(data.programs) ? data.programs : [];
-    $('#epgPrograms').innerHTML = programs.length
-      ? programs.map((program, index) => `<button class="epg-program ${program.current ? 'current' : ''}" type="button" data-epg-index="${index}"><time>${formatEpgTime(program.start)}–${formatEpgTime(program.end)}</time><strong>${esc(program.title)}</strong>${program.current ? `<span class="epg-progress"><span style="width:${Math.max(0, Math.min(100, Number(program.progress) || 0))}%"></span></span>` : ''}</button>`).join('')
-      : '<div class="live-empty">Aucun programme disponible pour cette chaîne.</div>';
-    $('#epgDetail').classList.add('hidden');
-    $('#epgPrograms').querySelectorAll('[data-epg-index]').forEach(button => {
-      button.onclick = () => {
-        const program = programs[Number(button.dataset.epgIndex)];
-        if (!program) return;
-        $('#epgDetail').innerHTML = `<strong>${esc(program.title)}</strong><span>${formatEpgTime(program.start)}–${formatEpgTime(program.end)}${program.category ? ` · ${esc(program.category)}` : ''}</span><p>${esc(program.description || 'Aucune description disponible.')}</p>`;
-        $('#epgDetail').classList.remove('hidden');
-      };
-    });
-  } catch (error) {
-    $('#epgPrograms').innerHTML = retryMessage(error.message, 'epg');
   }
 }
 
@@ -674,52 +648,17 @@ async function loadEpgOverview() {
     const data = await json('/api/epg/now');
     liveEpg = data.channels || {};
     liveEpgLoaded = true;
+    epgLoaded = true;
+    const count = liveChannels.filter(channel => liveEpg[channel.name]?.current).length;
+    $('#liveEpgSummary').textContent = count ? `${count} chaînes avec leur programme actuel` : 'Programmes momentanément indisponibles';
     renderLiveChannels();
-    renderEpgChannelGuide();
   } catch {
     liveEpg = {};
     liveEpgLoaded = true;
+    epgLoaded = true;
+    $('#liveEpgSummary').textContent = 'Programmes momentanément indisponibles';
     renderLiveChannels();
-    renderEpgChannelGuide();
   }
-}
-
-function renderEpgChannelGuide() {
-  const grid = $('#epgChannelGrid');
-  if (!grid) return;
-  const query = $('#epgSearch').value.trim().toLocaleLowerCase('fr');
-  const availability = $('#epgAvailability').value;
-  const channels = liveChannels.filter(channel => {
-    const hasGuide = Boolean(liveEpg[channel.name]?.current || liveEpg[channel.name]?.next);
-    return (!query || `${channel.name} ${channel.country} ${channel.category}`.toLocaleLowerCase('fr').includes(query))
-      && (!availability || (availability === 'available' ? hasGuide : !hasGuide));
-  });
-  const availableCount = liveChannels.filter(channel => liveEpg[channel.name]?.current || liveEpg[channel.name]?.next).length;
-  $('#epgCoverage').innerHTML = `<strong>${availableCount}</strong> chaîne${availableCount > 1 ? 's' : ''} avec programme · <span>${liveChannels.length} chaînes parcourues</span>`;
-  if (!channels.length) {
-    grid.innerHTML = '<div class="epg-guide-empty">Aucune chaîne ne correspond à cette recherche.</div>';
-    return;
-  }
-  grid.innerHTML = channels.slice(0, 500).map(channel => {
-    const guide = liveEpg[channel.name];
-    const current = guide?.current;
-    const next = guide?.next;
-    const progress = Math.max(0, Math.min(100, Number(current?.progress) || 0));
-    return `<button class="epg-channel-row ${current ? 'has-program' : ''}" type="button" data-epg-channel="${esc(channel.name)}">
-      <span class="epg-channel-identity">${channel.image ? `<img loading="lazy" src="${esc(channel.image)}" alt="">` : `<b>${esc(channel.name.slice(0, 1))}</b>`}<span><strong>${esc(channel.name)}</strong><small>${esc(channel.country)} · ${esc(channel.category)}</small></span></span>
-      <span class="epg-channel-current">${current ? `<time>${formatEpgTime(current.start)}–${formatEpgTime(current.end)}</time><strong>${esc(current.title)}</strong><span class="epg-progress"><span style="width:${progress}%"></span></span>` : '<em>Programme non renseigné</em>'}</span>
-      <span class="epg-channel-next">${next ? `<small>Ensuite · ${formatEpgTime(next.start)}</small><strong>${esc(next.title)}</strong>` : ''}</span>
-      <span class="epg-row-arrow">›</span>
-    </button>`;
-  }).join('');
-  grid.querySelectorAll('[data-epg-channel]').forEach(button => {
-    button.addEventListener('click', () => {
-      grid.querySelectorAll('.active').forEach(row => row.classList.remove('active'));
-      button.classList.add('active');
-      loadEpg(button.dataset.epgChannel);
-      $('#epgPrograms').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-  });
 }
 
 function loadLiveChannels(force = false) {
@@ -792,11 +731,13 @@ function renderLiveChannels() {
     const guide = liveEpg[channel.name];
     const current = guide?.current;
     const next = guide?.next;
+    const progress = Math.max(0, Math.min(100, Number(current?.progress) || 0));
     const programMarkup = current
-      ? `<span class="live-program"><span class="live-program-label">Maintenant · ${formatEpgTime(current.start)}–${formatEpgTime(current.end)}</span><strong>${esc(current.title)}</strong><span class="live-now-progress" aria-label="Progression ${Math.max(0, Math.min(100, Number(current.progress) || 0))} %"><span style="width:${Math.max(0, Math.min(100, Number(current.progress) || 0))}%"></span></span>${next ? `<span class="live-next"><b>${formatEpgTime(next.start)}</b> · ${esc(next.title)}</span>` : ''}</span>`
-      : `<span class="live-program live-program-empty">${liveEpgLoaded ? 'Programme non renseigné' : 'Programme en cours de chargement…'}</span>`;
-    return `<a class="live-card" href="${target.pathname}${target.search}" data-live-id="${esc(channel.id)}">
+      ? `<span class="live-program"><span class="live-program-label"><b>Maintenant</b><time>${formatEpgTime(current.start)}–${formatEpgTime(current.end)}</time></span><strong>${esc(current.title)}</strong>${current.description ? `<span class="live-program-description">${esc(current.description)}</span>` : ''}<span class="live-now-progress" aria-label="Progression ${progress} %"><span style="width:${progress}%"></span></span>${next ? `<span class="live-next"><small>À suivre</small><b>${formatEpgTime(next.start)}</b> · ${esc(next.title)}</span>` : ''}</span>`
+      : `<span class="live-program live-program-empty">${liveEpgLoaded ? '<b>Aucun programme disponible</b><small>La chaîne reste accessible en direct.</small>' : '<b>Chargement du programme…</b>'}</span>`;
+    return `<a class="live-card" href="${target.pathname}${target.search}" data-live-id="${esc(channel.id)}" aria-label="Regarder ${esc(channel.name)} en direct${current ? `, maintenant ${esc(current.title)}` : ''}">
       <span class="live-badge"><span class="live-dot"></span> EN DIRECT</span>
+      <span class="live-card-play" aria-hidden="true">▶</span>
       ${channel.image ? `<img loading="lazy" src="${esc(channel.image)}" alt="Logo ${esc(channel.name)}">` : `<span class="live-card-logo-fallback">${esc(channel.name.slice(0, 1))}</span>`}
       <span class="live-card-info"><strong>${esc(channel.name)}</strong><span>${esc(channel.country)} · ${esc(channel.category)}</span></span>
       ${programMarkup}
@@ -1658,19 +1599,6 @@ $('#liveTab').onclick = () => enterLive('', $('#liveTab'));
 $('#liveSearch').addEventListener('input', () => { liveVisibleLimit = 60; renderLiveChannels(); });
 ['#liveCategory', '#liveCountry'].forEach(selector => $(selector).addEventListener('change', () => { liveVisibleLimit = 60; renderLiveChannels(); }));
 $('#liveMore').onclick = () => { liveVisibleLimit += 60; renderLiveChannels(); };
-$('#epgSearch').addEventListener('input', renderEpgChannelGuide);
-$('#epgAvailability').addEventListener('change', renderEpgChannelGuide);
-$('#epgRefresh').onclick = () => {
-  liveEpgLoaded = false;
-  $('#epgCoverage').textContent = 'Actualisation de la grille TV…';
-  json('/api/epg/refresh', { method: 'POST', timeout: 35000 })
-    .then(() => Promise.all([loadEpgOverview(), loadEpg()]))
-    .catch(error => { $('#epgCoverage').innerHTML = retryMessage(error.message, 'epg-refresh'); });
-};
-$('#epgToggle').onclick = () => {
-  $('#epgPanel').classList.toggle('collapsed');
-  $('#epgToggle').textContent = $('#epgPanel').classList.contains('collapsed') ? '▦ Afficher le programme TV' : '▦ Masquer le programme TV';
-};
 $('#globalSearchBtn').onclick = openGlobalSearch;
 $('#globalSearchClose').onclick = closeGlobalSearch;
 $('#globalSearch').addEventListener('click', event => { if (event.target === $('#globalSearch')) closeGlobalSearch(); });
@@ -1773,8 +1701,6 @@ document.addEventListener('click', event => {
   if (action === 'catalogue') load();
   else if (action === 'live') { liveLoaded = false; loadLiveChannels(true); }
   else if (action === 'startup') init();
-  else if (action === 'epg') loadEpg();
-  else if (action === 'epg-refresh') $('#epgRefresh').click();
   else if (action.startsWith('mood:')) loadMood(action.slice(5));
   else if (action.startsWith('rail:')) {
     const selector = action.slice(5);
