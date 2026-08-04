@@ -1,6 +1,6 @@
 'use strict';
 
-const STATIC_CACHE = 'vidzy-madra-static-v16';
+const STATIC_CACHE = 'vidzy-madra-static-v17';
 const IMAGE_CACHE = 'vidzy-images-v1';
 const SHELL = ['/offline.html', '/manifest.webmanifest', '/icon.svg'];
 

@@ -189,31 +189,13 @@
     <section id="liveView" class="live-view hidden" aria-labelledby="liveTitle">
       <div class="live-heading">
         <div><p class="eyebrow">Télévision en direct</p><h1 id="liveTitle">Le direct, maintenant.</h1><p>Retrouvez les chaînes disponibles et lancez la lecture instantanément.</p></div>
-        <div class="live-status"><span class="live-dot"></span><strong id="liveCount">Chargement…</strong><time id="liveClock" datetime="">--:--</time></div>
+        <div class="live-status-stack"><div class="live-status"><span class="live-dot"></span><strong id="liveCount">Chargement…</strong><time id="liveClock" datetime="">--:--</time></div><small id="liveEpgSummary">Programmes en cours de synchronisation…</small></div>
       </div>
       <div class="live-toolbar">
         <label class="search-field"><span class="search-icon">⌕</span><input id="liveSearch" type="search" placeholder="Rechercher une chaîne…" autocomplete="off"></label>
         <select id="liveCategory" aria-label="Filtrer par catégorie"><option value="">Toutes les catégories</option></select>
         <select id="liveCountry" aria-label="Filtrer par pays"><option value="">Tous les pays</option></select>
-        <button id="epgToggle" class="epg-guide-link" type="button">▦ Programme TV</button>
       </div>
-      <section id="epgPanel" class="epg-panel" aria-labelledby="epgTitle">
-        <div class="epg-panel-head"><div><p class="eyebrow">Guide complet</p><h2 id="epgTitle">Programme TV</h2><p>Le programme de toutes les chaînes, sans quitter le Direct.</p></div><a href="https://epg.pw/areas/fr.html?lang=fr" target="_blank" rel="noopener noreferrer">Source EPG.pw ↗</a></div>
-        <div class="epg-controls">
-          <label class="epg-search"><span aria-hidden="true">⌕</span><input id="epgSearch" type="search" aria-label="Rechercher une chaîne dans le programme TV" placeholder="Rechercher dans le guide…" autocomplete="off"></label>
-          <select id="epgAvailability" aria-label="Filtrer le guide TV"><option value="">Toutes les chaînes</option><option value="available">Avec programme</option><option value="unavailable">Sans programme</option></select>
-          <button id="epgRefresh" type="button">↻ Actualiser</button>
-        </div>
-        <div id="epgCoverage" class="epg-coverage" aria-live="polite">Chargement de la grille TV…</div>
-        <div class="epg-guide-layout">
-          <div id="epgChannelGrid" class="epg-channel-grid"><div class="epg-loading">Chargement des chaînes…</div></div>
-          <section class="epg-schedule" aria-labelledby="epgSelectedTitle">
-            <div class="epg-schedule-head"><p class="eyebrow">Grille détaillée</p><h3 id="epgSelectedTitle">Sélectionnez une chaîne</h3></div>
-            <div id="epgPrograms" class="epg-programs" aria-live="polite"><div class="epg-loading">Choisissez une chaîne pour afficher sa grille.</div></div>
-            <div id="epgDetail" class="epg-detail hidden" role="status"></div>
-          </section>
-        </div>
-      </section>
       <div id="liveGrid" class="live-grid"><div class="live-loading">Chargement des chaînes…</div></div>
       <button id="liveMore" class="live-more hidden" type="button">Afficher plus de chaînes</button>
     </section>
@@ -327,6 +309,6 @@
     </div>
   </div>
   <script src="/vendor/hls.min.js" defer></script>
-  <script src="app.js?v=53" defer></script>
+  <script src="app.js?v=54" defer></script>
 </body>
 </html>

@@ -58,7 +58,7 @@ Le site est disponible sur `http://localhost:3000` avec la configuration d’exe
 - Ma liste, historique, suppression individuelle et suppression globale confirmée ;
 - profil local unique Madra, sans compte serveur ;
 - télévision et sport lancés immédiatement à partir du flux externe configuré ;
-- guide TV XMLTV français intégré au Direct, fourni par EPG.PW, avec programmes en cours/suivants et progression ;
+- programmes XMLTV français intégrés directement sous chaque chaîne du Direct, fournis par EPG.PW, avec émission en cours, horaires, progression et programme suivant ;
 - PWA installable avec page hors connexion ;
 - API protégée par CSP, Helmet, limitation de débit, validation, cache borné et déduplication des requêtes TMDB.
 
