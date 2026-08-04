@@ -289,9 +289,16 @@ function armInlineTimeout() {
   window.clearTimeout(inlineLoadTimer);
   inlineLoadTimer = window.setTimeout(() => {
     if (inlinePlayerState === 'playing') return;
-    setInlinePlayerState('unavailable', `Le chargement de « ${inlineSourceContext?.name || 'la source sélectionnée'} » prend plus de temps que prévu. Vous pouvez patienter, réessayer ou choisir la source suivante.`);
-    $('#inlinePlayerNextSource').classList.toggle('hidden', !inlineSourceContext?.next);
-  }, 15000);
+    // An embedded cross-origin player cannot reliably expose its internal
+    // playback state. A slow iframe is therefore not proof that the source is
+    // unavailable: keep it mounted and visible instead of covering it with a
+    // false error screen.
+    inlinePlayerState = 'loading';
+    $('#inlinePlayer').dataset.state = 'loading';
+    $('#inlinePlayerLoading').classList.add('hidden');
+    $('#inlinePlayerError').classList.add('hidden');
+    $('#inlinePlayerFrameHost').setAttribute('aria-busy', 'false');
+  }, 30000);
 }
 
 function renderProfiles() {
