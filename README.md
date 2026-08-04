@@ -123,4 +123,4 @@ Variables Render obligatoires :
 
 ## Sécurité
 
-Les domaines de lecteur sont limités par `ALLOWED_PLAYER_HOSTS` et les flux HLS par `ALLOWED_HLS_HOSTS`. Les URL vides, non HTTPS, privées, avec identifiants ou appartenant à un domaine inconnu sont refusées par les utilitaires testés. Le Direct utilise HLS natif ou Hls.js lorsqu’un manifeste autorisé est fourni et conserve l’iframe historique dans les autres cas. Les iframes utilisent un `sandbox` minimal. Consulte `AUDIT-RAPPORT.md` pour le détail.
+Les domaines de lecteur sont limités par `ALLOWED_PLAYER_HOSTS` et les flux HLS par `ALLOWED_HLS_HOSTS`. Les URL vides, non HTTPS, privées, avec identifiants ou appartenant à un domaine inconnu sont refusées par les utilitaires testés. Chaque redirection HLS est vérifiée côté serveur avant transmission au navigateur et reste obligatoirement sur la liste blanche. Le Direct utilise HLS natif ou Hls.js lorsqu’un manifeste autorisé est fourni et conserve l’iframe historique dans les autres cas. Les iframes utilisent un `sandbox` minimal. Consulte `AUDIT-RAPPORT.md` pour le détail.

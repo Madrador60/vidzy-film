@@ -6,7 +6,7 @@ const packageJson = require('./package.json');
 const { BoundedCache } = require('./lib/bounded-cache');
 const { EpgService, programProgress } = require('./lib/epg-service');
 const { fetchWithTimeout } = require('./lib/fetch-timeout');
-const { allowedHlsHosts, safeHlsUrl } = require('./lib/hls-url');
+const { allowedHlsHosts, safeHlsUrl, validateHlsRedirects } = require('./lib/hls-url');
 const validation = require('./lib/validation');
 require('dotenv').config();
 
@@ -23,6 +23,7 @@ const epgService = new EpgService();
 const vidzyAvailabilityCache = new BoundedCache({ maxEntries: 2000, ttlMs: 10 * 60 * 1000 });
 const tmdbCache = new BoundedCache({ maxEntries: 1200, ttlMs: 10 * 60 * 1000 });
 const tmdbPending = new Map();
+const hlsValidationCache = new BoundedCache({ maxEntries: 300, ttlMs: 5 * 60 * 1000 });
 const vidzyWaiters = [];
 let vidzyActiveChecks = 0;
 const VIDZY_MAX_CONCURRENT = 6;
@@ -340,6 +341,24 @@ async function directRoute(_req, res) {
 
 app.get('/api/live', directRoute);
 app.get('/api/direct/channels', directRoute);
+app.get('/api/direct/hls/:id', async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id)) return res.status(400).json({ error: 'Chaîne invalide.' });
+  try {
+    const { channels } = await loadDirectChannels();
+    const channel = channels.find(item => item.id === id);
+    if (!channel?.hlsSource) return res.status(404).json({ error: 'Aucun flux HLS disponible pour cette chaîne.' });
+    let url = hlsValidationCache.get(channel.hlsSource);
+    if (!url) {
+      url = await validateHlsRedirects(channel.hlsSource, { hosts: HLS_HOSTS });
+      hlsValidationCache.set(channel.hlsSource, url);
+    }
+    res.json({ url });
+  } catch (error) {
+    console.warn('[direct:hls]', id, error.message);
+    sendRouteError(res, error, 'Le flux HLS est indisponible.');
+  }
+});
 
 function serializeProgram(program, now = Date.now()) {
   if (!program) return null;
