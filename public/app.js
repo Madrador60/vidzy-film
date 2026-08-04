@@ -37,6 +37,9 @@ let inlineReturnTarget = 'detail';
 let inlineSourceContext = null;
 let inlineReturnUrl = '';
 let inlinePlayerState = 'idle';
+let hlsInstance = null;
+let hlsNetworkRecoveries = 0;
+let hlsMediaRecoveries = 0;
 let installPrompt = null;
 const loadedHomeRails = new Set();
 let globalGenresLoaded = false;
@@ -163,12 +166,92 @@ function setInlinePlayerState(nextState, message = '') {
   $('#inlinePlayerLoading').classList.toggle('hidden', !['idle', 'loading'].includes(inlinePlayerState));
   $('#inlinePlayerError').classList.toggle('hidden', !['error', 'unavailable'].includes(inlinePlayerState));
   $('#inlinePlayerErrorTitle').textContent = inlinePlayerState === 'error' ? 'Impossible de charger la source' : 'Chargement prolongé';
+  $('#inlinePlayerStart').classList.add('hidden');
+  if (message && ['idle', 'loading'].includes(inlinePlayerState)) $('#inlinePlayerLoadingText').textContent = message;
   if (message) $('#inlinePlayerErrorText').textContent = message;
 }
 
 function destroyInlineFrame() {
+  window.clearTimeout(inlineLoadTimer);
+  if (hlsInstance) {
+    hlsInstance.destroy();
+    hlsInstance = null;
+  }
+  const video = $('#inlinePlayerVideo');
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
   const host = $('#inlinePlayerFrameHost');
   if (host) host.replaceChildren();
+}
+
+function safeHlsSource(value = '') {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === 'https:' && !url.username && !url.password && /\.m3u8$/i.test(url.pathname) ? url.href : '';
+  } catch { return ''; }
+}
+
+function mountInlineHls(source) {
+  const safeSource = safeHlsSource(source);
+  destroyInlineFrame();
+  if (!safeSource) {
+    setInlinePlayerState('error', 'Cette adresse HLS n’est pas valide.');
+    return false;
+  }
+  const video = document.createElement('video');
+  video.id = 'inlinePlayerVideo';
+  video.controls = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.volume = Math.max(0, Math.min(1, Number(localStorage.getItem('vidzy-live-volume') ?? .8)));
+  video.addEventListener('volumechange', () => localStorage.setItem('vidzy-live-volume', String(video.volume)));
+  video.addEventListener('playing', () => setInlinePlayerState('playing'));
+  video.addEventListener('waiting', () => setInlinePlayerState('loading', 'Connexion au direct…'));
+  video.addEventListener('error', () => {
+    if (hlsInstance) return;
+    destroyInlineFrame();
+    setInlinePlayerState('error', 'Le flux vidéo est indisponible.');
+  });
+  $('#inlinePlayerFrameHost').append(video);
+  setInlinePlayerState('loading', 'Connexion au direct…');
+  hlsNetworkRecoveries = 0;
+  hlsMediaRecoveries = 0;
+  const startPlayback = () => video.play().catch(() => {
+    setInlinePlayerState('idle', 'Le direct est prêt. Appuyez sur Lecture.');
+    $('#inlinePlayerStart').classList.remove('hidden');
+  });
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = safeSource;
+    video.addEventListener('loadedmetadata', startPlayback, { once: true });
+    return true;
+  }
+  if (!window.Hls?.isSupported()) {
+    destroyInlineFrame();
+    setInlinePlayerState('error', 'La lecture HLS n’est pas prise en charge par ce navigateur.');
+    return false;
+  }
+  hlsInstance = new window.Hls({ enableWorker: true, lowLatencyMode: true, backBufferLength: 30 });
+  hlsInstance.loadSource(safeSource);
+  hlsInstance.attachMedia(video);
+  hlsInstance.on(window.Hls.Events.MANIFEST_PARSED, startPlayback);
+  hlsInstance.on(window.Hls.Events.ERROR, (_event, data) => {
+    if (!data.fatal || !hlsInstance) return;
+    if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR && hlsNetworkRecoveries++ < 2) {
+      hlsInstance.startLoad();
+      return;
+    }
+    if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR && hlsMediaRecoveries++ < 1) {
+      hlsInstance.recoverMediaError();
+      return;
+    }
+    destroyInlineFrame();
+    setInlinePlayerState('error', 'Le flux vidéo est indisponible. Réessayez ou choisissez une autre chaîne.');
+  });
+  return true;
 }
 
 function mountInlineFrame(source) {
@@ -731,22 +814,24 @@ function renderLiveChannels() {
 function openLiveChannel(channel) {
   if (!channel || !/^[a-zA-Z0-9_-]{1,80}$/.test(channel.id || '')) return;
   const changingSource = !$('#inlinePlayer').hidden;
-  const source = `https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channel.id)}`;
+  const iframeSource = channel.sources?.[0] || `https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channel.id)}`;
+  const hlsSource = safeHlsSource(channel.hlsSource);
+  const source = hlsSource || iframeSource;
   inlineReturnTarget = 'home';
   if (!changingSource) inlineReturnUrl = location.href;
   const index = liveChannels.findIndex(item => item.id === channel.id);
   const next = index >= 0 && liveChannels.length > 1 ? liveChannels[(index + 1) % liveChannels.length] : null;
-  inlineSourceContext = { kind: 'live', name: channel.name || channel.id, url: source, next };
+  inlineSourceContext = { kind: 'live', name: channel.name || channel.id, url: source, next, hls: Boolean(hlsSource) };
   inlineProgressContext = null;
   $('#inlinePlayerTitle').textContent = channel.name || 'Chaîne en direct';
-  $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'} · Source active : Hesgoaler`;
+  $('#inlinePlayerMeta').textContent = `● EN DIRECT · ${channel.country || 'International'} · Source active : ${hlsSource ? 'HLS' : 'Hesgoaler'}`;
   $('#inlinePlayerExternal').href = source;
   setInteractiveVisibility($('#inlinePlayer'), true);
   setPlayerMode(true);
   setInlinePlayerState('idle');
   $('#inlinePlayerErrorText').textContent = '';
   requestInlineFullscreen();
-  if (mountInlineFrame(source)) armInlineTimeout();
+  if (hlsSource ? mountInlineHls(source) : mountInlineFrame(source)) armInlineTimeout();
   if (!changingSource) {
     const playerUrl = new URL(location.href);
     playerUrl.hash = 'player';
@@ -1340,7 +1425,14 @@ function requestInlineFullscreen() {
     const result = player.requestFullscreen
       ? player.requestFullscreen({ navigationUI: 'hide' })
       : player.webkitRequestFullscreen?.();
-    if (!result && !document.fullscreenElement) return Promise.resolve(Boolean(player.webkitDisplayingFullscreen));
+    if (!result && !document.fullscreenElement) {
+      const video = $('#inlinePlayerVideo');
+      if (video?.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+        return Promise.resolve(true);
+      }
+      return Promise.resolve(Boolean(player.webkitDisplayingFullscreen));
+    }
     return Promise.resolve(result).then(() => true).catch(() => false);
   } catch { return Promise.resolve(false); }
 }
@@ -1638,10 +1730,15 @@ $('#inlinePlayerFullscreen').onclick = toggleInlineFullscreen;
 $('#inlinePlayerRetry').onclick = () => {
   const source = inlineSourceContext?.url;
   if (!source) return;
-  const retrySource = new URL(source);
-  retrySource.searchParams.set('_retry', String(Date.now()));
-  if (mountInlineFrame(retrySource.toString())) armInlineTimeout();
+  if (inlineSourceContext?.hls) {
+    if (mountInlineHls(source)) armInlineTimeout();
+  } else {
+    const retrySource = new URL(source);
+    retrySource.searchParams.set('_retry', String(Date.now()));
+    if (mountInlineFrame(retrySource.toString())) armInlineTimeout();
+  }
 };
+$('#inlinePlayerStart').onclick = () => $('#inlinePlayerVideo')?.play().catch(() => {});
 $('#inlinePlayerNextSource').onclick = () => {
   const next = inlineSourceContext?.next;
   if (next) openLiveChannel(next);
@@ -1674,9 +1771,6 @@ document.addEventListener('error', event => {
 }, true);
 document.addEventListener('fullscreenchange', () => {
   $('#inlinePlayerFullscreen').textContent = document.fullscreenElement ? '× Quitter le plein écran' : '⛶ Plein écran';
-  if (!document.fullscreenElement && !$('#inlinePlayer').classList.contains('hidden')) {
-    restoreDetailAfterPlayer(true);
-  }
 });
 window.addEventListener('popstate', () => {
   if (!$('#inlinePlayer').classList.contains('hidden')) restoreDetailAfterPlayer(false);

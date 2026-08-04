@@ -266,7 +266,7 @@
       <div class="inline-player-actions"><button id="inlinePlayerFullscreen" type="button">⛶ Plein écran</button><a id="inlinePlayerExternal" href="#" target="_blank" rel="noopener noreferrer">Ouvrir sur Vidzy ↗</a></div>
     </header>
     <div class="inline-player-stage">
-      <div id="inlinePlayerLoading" class="inline-player-loading" role="status">Sélectionnez une source pour commencer la lecture.</div>
+      <div id="inlinePlayerLoading" class="inline-player-loading" role="status"><span id="inlinePlayerLoadingText">Sélectionnez une source pour commencer la lecture.</span><button id="inlinePlayerStart" class="hidden" type="button">▶ Lecture</button></div>
       <div id="inlinePlayerError" class="inline-player-error hidden" role="alert"><strong id="inlinePlayerErrorTitle">Lecture indisponible</strong><span id="inlinePlayerErrorText">Vous pouvez relancer le lecteur ou revenir à la fiche.</span><div class="inline-error-actions"><button id="inlinePlayerRetry" type="button">Réessayer</button><button id="inlinePlayerNextSource" class="hidden" type="button">Source suivante</button></div></div>
       <div id="inlinePlayerFrameHost" class="inline-player-frame-host"></div>
     </div>
@@ -326,6 +326,7 @@
       </div>
     </div>
   </div>
-  <script src="app.js?v=51"></script>
+  <script src="/vendor/hls.min.js" defer></script>
+  <script src="app.js?v=52" defer></script>
 </body>
 </html>

@@ -13,3 +13,5 @@ services:
         sync: false
       - key: ALLOWED_PLAYER_HOSTS
         value: vidzy.org,www.vidzy.org,hesgoaler.com,www.youtube-nocookie.com
+      - key: ALLOWED_HLS_HOSTS
+        value: hesgoaler.com

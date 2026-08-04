@@ -24,6 +24,7 @@ PORT=3000
 NODE_ENV=development
 TMDB_BEARER_TOKEN=your_tmdb_bearer_token_here
 ALLOWED_PLAYER_HOSTS=vidzy.org,www.vidzy.org,hesgoaler.com,www.youtube-nocookie.com
+ALLOWED_HLS_HOSTS=hesgoaler.com
 ```
 
 Le projet utilise uniquement `TMDB_BEARER_TOKEN` (jeton de lecture API TMDB v4). Ne publie jamais `.env` et n’expose jamais ce jeton au navigateur.
@@ -110,6 +111,7 @@ Variables Render obligatoires :
 - `NODE_ENV=production` ;
 - `TMDB_BEARER_TOKEN` : jeton de lecture TMDB, configuré comme secret ;
 - `ALLOWED_PLAYER_HOSTS=vidzy.org,www.vidzy.org,hesgoaler.com,www.youtube-nocookie.com`.
+- `ALLOWED_HLS_HOSTS=hesgoaler.com` : domaines HTTPS autorisés à fournir des manifestes `.m3u8`.
 
 ## Limites connues
 
@@ -121,4 +123,4 @@ Variables Render obligatoires :
 
 ## Sécurité
 
-Les domaines de lecteur sont limités par `ALLOWED_PLAYER_HOSTS`. Les URL vides, non HTTPS, avec identifiants ou appartenant à un domaine inconnu sont refusées par les utilitaires testés. Les iframes utilisent un `sandbox` minimal. Consulte `AUDIT-RAPPORT.md` pour le détail.
+Les domaines de lecteur sont limités par `ALLOWED_PLAYER_HOSTS` et les flux HLS par `ALLOWED_HLS_HOSTS`. Les URL vides, non HTTPS, privées, avec identifiants ou appartenant à un domaine inconnu sont refusées par les utilitaires testés. Le Direct utilise HLS natif ou Hls.js lorsqu’un manifeste autorisé est fourni et conserve l’iframe historique dans les autres cas. Les iframes utilisent un `sandbox` minimal. Consulte `AUDIT-RAPPORT.md` pour le détail.

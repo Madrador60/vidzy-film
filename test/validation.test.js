@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const validation = require('../lib/validation');
 const { safePlayerUrl, allowedHosts } = require('../lib/player-url');
+const { safeHlsUrl, allowedHlsHosts, isPrivateIp } = require('../lib/hls-url');
 const { BoundedCache } = require('../lib/bounded-cache');
 
 test('valide les identifiants, pages, années et recherches', () => {
@@ -23,6 +24,16 @@ test('valide strictement les URL de lecteurs', () => {
   assert.equal(safePlayerUrl('data:text/html,test', hosts), '');
   assert.equal(safePlayerUrl('https://evil.example/player', hosts), '');
   assert.match(safePlayerUrl('https://vidzy.org/movie/123', hosts), /^https:\/\/vidzy\.org/);
+});
+
+test('valide strictement les flux HLS directs', () => {
+  const hosts = allowedHlsHosts('cdn.example.com');
+  assert.equal(safeHlsUrl('http://cdn.example.com/live.m3u8', hosts), '');
+  assert.equal(safeHlsUrl('https://evil.example/live.m3u8', hosts), '');
+  assert.equal(safeHlsUrl('https://cdn.example.com/player.html', hosts), '');
+  assert.equal(safeHlsUrl('https://127.0.0.1/live.m3u8', new Set(['127.0.0.1'])), '');
+  assert.equal(isPrivateIp('192.168.1.20'), true);
+  assert.match(safeHlsUrl('https://cdn.example.com/live/channel.m3u8?token=test', hosts), /^https:\/\/cdn\.example\.com/);
 });
 
 test('le cache borné supprime les entrées les plus anciennes', () => {
