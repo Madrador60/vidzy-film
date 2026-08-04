@@ -281,7 +281,9 @@ function mountInlineFrame(source) {
   }, { once: true });
   $('#inlinePlayerFrameHost').append(frame);
   frame.src = safeSource;
-  setInlinePlayerState('loading');
+  setInlinePlayerState('loading', inlineSourceContext?.kind === 'media'
+    ? 'Chargement du lecteur Vidzy…'
+    : 'Connexion au direct…');
   return true;
 }
 
