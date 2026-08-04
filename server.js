@@ -6,6 +6,7 @@ const packageJson = require('./package.json');
 const { BoundedCache } = require('./lib/bounded-cache');
 const { EpgService, programProgress } = require('./lib/epg-service');
 const { fetchWithTimeout } = require('./lib/fetch-timeout');
+const { allowedHlsHosts, safeHlsUrl } = require('./lib/hls-url');
 const validation = require('./lib/validation');
 require('dotenv').config();
 
@@ -15,6 +16,7 @@ const STARTED_AT = new Date();
 const TMDB_TOKEN = String(process.env.TMDB_BEARER_TOKEN || '').trim();
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const LIVE_FEED = 'https://hesgoaler.com/madra.json';
+const HLS_HOSTS = allowedHlsHosts();
 let liveCache = { expires: 0, channels: [] };
 let livePending = null;
 const epgService = new EpgService();
@@ -61,7 +63,8 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
       imgSrc: ["'self'", 'data:', 'https://image.tmdb.org', 'https:'],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", ...[...HLS_HOSTS].map(host => `https://${host}`)],
+      mediaSrc: ["'self'", 'blob:', ...[...HLS_HOSTS].map(host => `https://${host}`)],
       frameSrc: ['https://vidzy.org', 'https://hesgoaler.com', 'https://www.youtube-nocookie.com'],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
@@ -77,6 +80,10 @@ app.use((_req, res, next) => {
 });
 app.use(compression());
 app.use(express.json({ limit: '32kb' }));
+app.get('/vendor/hls.min.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+  res.sendFile(path.join(__dirname, 'node_modules', 'hls.js', 'dist', 'hls.min.js'));
+});
 app.use('/api', (req, res, next) => {
   const now = Date.now();
   const key = req.ip || req.socket.remoteAddress || 'unknown';
@@ -275,8 +282,14 @@ function parseDirectChannels(source) {
     try {
       const streamUrl = new URL(String(item.url || ''));
       const channelId = streamUrl.hostname === 'hesgoaler.com' && streamUrl.pathname === '/madra.php'
-        ? streamUrl.searchParams.get('ch') : '';
+        ? streamUrl.searchParams.get('ch')
+        : String(item.channel_id || item.id || '').trim();
       if (!channelId || !/^[a-zA-Z0-9_-]{1,80}$/.test(channelId)) return [];
+      const hlsSource = [item.hls, item.hls_url, item.stream_url, item.url]
+        .map(candidate => safeHlsUrl(candidate, HLS_HOSTS)).find(Boolean) || '';
+      const iframeSource = streamUrl.hostname === 'hesgoaler.com' && streamUrl.pathname === '/madra.php'
+        ? `https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channelId)}` : '';
+      if (!iframeSource && !hlsSource) return [];
       const image = String(item.image || '');
       return [{
         id: channelId,
@@ -286,7 +299,8 @@ function parseDirectChannels(source) {
         country: String(item.country || 'International').trim().slice(0, 60),
         category: String(item.category || 'General').trim().slice(0, 40),
         language: String(item.language || '').trim().slice(0, 30),
-        sources: [`https://hesgoaler.com/madra.php?ch=${encodeURIComponent(channelId)}`]
+        sources: iframeSource ? [iframeSource] : [],
+        hlsSource
       }];
     } catch { return []; }
   });

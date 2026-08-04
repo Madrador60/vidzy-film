@@ -128,6 +128,16 @@ test('parse, valide et déduplique le catalogue de chaînes', () => {
   assert.equal(channels[0].sources[0], 'https://hesgoaler.com/madra.php?ch=TF1FR');
 });
 
+test('conserve un flux HLS autorisé sans remplacer les lecteurs iframe', () => {
+  const channels = parseDirectChannels([
+    { id: 'TESTHLS', channel_name: 'Test HLS', url: 'https://hesgoaler.com/live/test.m3u8' },
+    { id: 'PRIVATE', channel_name: 'Interdit', url: 'https://127.0.0.1/live.m3u8' }
+  ]);
+  assert.equal(channels.length, 1);
+  assert.equal(channels[0].hlsSource, 'https://hesgoaler.com/live/test.m3u8');
+  assert.deepEqual(channels[0].sources, []);
+});
+
 test('annule une requête réseau qui dépasse le délai', async () => {
   const slowFetch = (_url, options) => new Promise((_resolve, reject) => {
     options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
